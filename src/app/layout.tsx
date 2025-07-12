@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: 'Katana Vault API',
-  description: 'API for Yearn vault APR data and DeFi protocols.',
+  description: 'API for Yearn Katana vault data.',
 }
 
 export default function RootLayout({
