@@ -14,7 +14,32 @@ pnpm dev
 bun dev
 ```
 
+
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+
+## API Usage
+
+This project is configured to serve API routes using Next.js serverless functions, suitable for Vercel hosting.
+
+- Example endpoint: [`/api/hello`](http://localhost:3000/api/hello)
+
+You can add more API endpoints by creating files in the `src/app/api/` directory. Each folder under `api/` represents a route, and you can use `route.ts` or `route.js` to define handlers for HTTP methods (GET, POST, etc.).
+
+### Example: Hello API
+
+Request:
+
+```bash
+curl http://localhost:3000/api/hello
+```
+
+Response:
+
+```json
+{
+  "message": "Hello from your Next.js API!"
+}
+```
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
