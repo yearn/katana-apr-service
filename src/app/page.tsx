@@ -1,6 +1,6 @@
 import React from 'react'
 
-export default function Home() {
+export default function Home(): React.ReactElement {
   return (
     <main className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-white to-gray-100 dark:from-[#18181b] dark:to-[#23232a] px-4 py-12">
       <section className="w-full max-w-2xl bg-white/80 dark:bg-zinc-900/80 rounded-2xl shadow-xl p-8 flex flex-col items-center gap-8 border border-zinc-200 dark:border-zinc-800">
@@ -8,10 +8,11 @@ export default function Home() {
           Katana APR Service
         </h1>
         <p className="text-lg text-center text-zinc-700 dark:text-zinc-300 max-w-xl">
-          This is a <span className="font-semibold">Next.js</span> app that
-          provides APR (Annual Percentage Rate) data for Yearn vaults and
-          related DeFi protocols via API endpoints. It is designed for
-          serverless deployment (e.g., Vercel).
+          {'This is a '}
+          <span className="font-semibold">Next.js</span>
+          {
+            " app that provides data for Yearn's Katana Vaults via API endpoints. It is designed for serverless deployment (e.g., Vercel)."
+          }
         </p>
 
         <div className="w-full flex flex-col items-center gap-6">
