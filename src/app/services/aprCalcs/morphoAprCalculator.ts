@@ -21,6 +21,8 @@ export class MorphoAprCalculator implements APRCalculator {
     vaults: YearnVault[]
   ): Promise<Record<string, RewardCalculatorResult[]>> {
     const morphoOpportunities = await this.merklApi.getMorphoOpportunities()
+    const MORPHO_WRAPPED_KAT_ADDRESS =
+      '0x3ba1fbC4c3aEA775d335b31fb53778f46FD3a330'
 
     const vaultStrategyPairs = _.chain(vaults)
       .map((vault) => ({
@@ -60,7 +62,8 @@ export class MorphoAprCalculator implements APRCalculator {
               strategy,
               poolAddress,
               morphoOpportunities,
-              'morpho'
+              'morpho',
+              MORPHO_WRAPPED_KAT_ADDRESS
             )
           })
           .compact()
@@ -70,7 +73,7 @@ export class MorphoAprCalculator implements APRCalculator {
       })
       .compact()
       .value() as Array<[string, RewardCalculatorResult[]]>
-
+    // console.dir(_.fromPairs(resultEntries), { depth: null })
     return _.fromPairs(resultEntries)
   }
 }
