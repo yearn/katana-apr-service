@@ -21,6 +21,8 @@ export class SushiAprCalculator implements APRCalculator {
     vaults: YearnVault[]
   ): Promise<Record<string, RewardCalculatorResult[]>> {
     const sushiOpportunities = await this.merklApi.getSushiOpportunities()
+    const SUSHI_WRAPPED_KAT_ADDRESS =
+      '0x6E9C1F88a960fE63387eb4b71BC525a9313d8461'
 
     const vaultStrategyPairs = _.chain(vaults)
       .map((vault) => ({
@@ -64,7 +66,8 @@ export class SushiAprCalculator implements APRCalculator {
               strategy,
               poolAddress,
               sushiOpportunities,
-              'sushi'
+              'sushi',
+              SUSHI_WRAPPED_KAT_ADDRESS
             )
           })
           .compact()

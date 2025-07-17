@@ -1,14 +1,26 @@
 import { isAddressEqual } from 'viem'
 import type { Campaign, Opportunity, RewardCalculatorResult } from './types'
 
-const WRAPPED_KAT_ADDRESS = '0x6E9C1F88a960fE63387eb4b71BC525a9313d8461'
-
+/**
+ * Calculates the APR breakdown for a given strategy and pool, based on available opportunities and campaigns.
+ *
+ * This function searches for the matching opportunity by pool address, then filters campaigns by the target reward token.
+ * For each matching campaign, it finds the corresponding APR breakdown and constructs a result object.
+ * If no opportunity or campaigns are found, returns a default result with zero APR.
+ *
+ * @param strategyAddress - The address of the strategy for which APR is being calculated.
+ * @param poolAddress - The address of the pool associated with the strategy.
+ * @param opportunities - An array of available opportunities, each containing campaigns and APR records.
+ * @param poolType - The type of the pool (e.g., 'morpho').
+ * @param targetRewardTokenAddress - The address of the reward token to filter campaigns by.
+ * @returns An array of `RewardCalculatorResult` objects containing APR breakdowns for each matching campaign, or `null` if no pool address is provided.
+ */
 export const calculateStrategyAPR = (
   strategyAddress: string,
   poolAddress: string,
   opportunities: Opportunity[],
   poolType: string,
-  targetRewardTokenAddress: string = WRAPPED_KAT_ADDRESS
+  targetRewardTokenAddress: string
 ): RewardCalculatorResult[] | null => {
   if (!poolAddress) {
     console.log('no pool')
@@ -21,6 +33,9 @@ export const calculateStrategyAPR = (
       poolAddress as `0x${string}`
     )
   )
+  // if (poolType === 'morpho') {
+  //   console.log(`Found opportunity for pool ${poolAddress}:`, opportunity)
+  // }
 
   if (!opportunity?.campaigns?.length) {
     console.log(`No ${poolType} opportunity found for pool ${poolAddress}`)
@@ -44,12 +59,24 @@ export const calculateStrategyAPR = (
   }
 
   // Find all campaigns with the specified rewardToken address
-  const targetCampaigns = opportunity.campaigns.filter((campaign: Campaign) =>
-    isAddressEqual(
+
+  const targetCampaigns = opportunity.campaigns.filter((campaign: Campaign) => {
+    // if (poolType === 'morpho') {
+    //   console.log('Comparing:', {
+    //     campaignRewardToken: campaign.rewardToken.address,
+    //     targetRewardToken: targetRewardTokenAddress,
+    //   })
+    // }
+    return isAddressEqual(
       campaign.rewardToken.address as `0x${string}`,
       targetRewardTokenAddress as `0x${string}`
     )
-  )
+  })
+  if (poolType === 'morpho') {
+    console.log(
+      `Found ${targetCampaigns.length} campaigns for pool ${poolAddress}`
+    )
+  }
 
   const strategyAprValues: Array<{ apr: number; campaign: Campaign }> = []
   if (
@@ -87,6 +114,43 @@ export const calculateStrategyAPR = (
       },
     })
   )
+  if (poolType === 'morpho') {
+    // console.dir(_.fromPairs(resultEntries), { depth: null })
+    console.dir(tokenBreakdowns, { depth: null })
+  }
 
-  return tokenBreakdowns
+  return combineTokenBreakdowns(tokenBreakdowns)
+}
+
+/**
+ * Combines an array of `RewardCalculatorResult` objects by merging entries with identical
+ * strategy, pool, token, and weight properties. The APR values of matching entries are summed.
+ *
+ * @param tokenBreakdowns - Array of `RewardCalculatorResult` objects to be combined.
+ * @returns An array of combined `RewardCalculatorResult` objects with summed APRs for duplicates.
+ */
+function combineTokenBreakdowns(
+  tokenBreakdowns: RewardCalculatorResult[]
+): RewardCalculatorResult[] {
+  const combined: Record<string, RewardCalculatorResult> = {}
+  for (const item of tokenBreakdowns) {
+    // Create a key from all fields except apr
+    const key = [
+      item.strategyAddress,
+      item.poolAddress,
+      item.poolType,
+      item.breakdown.token.address,
+      item.breakdown.token.symbol,
+      item.breakdown.token.decimals,
+      item.breakdown.weight,
+    ].join('|')
+    if (combined[key]) {
+      combined[key].breakdown.apr += item.breakdown.apr
+    } else {
+      combined[key] = { ...item }
+    }
+  }
+  console.log('returning combined token breakdowns')
+  console.dir(Object.values(combined), { depth: null })
+  return Object.values(combined)
 }
