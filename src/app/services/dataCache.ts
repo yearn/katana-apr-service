@@ -4,7 +4,7 @@ import { config } from '../config/index'
 import type { YearnVault } from '../types/index'
 import { YearnApiService } from './externalApis/yearnApi'
 import { MorphoAprCalculator } from './aprCalcs/morphoAprCalculator'
-import { SushiAprCalculator } from './aprCalcs/sushiAprCalculator'
+import { YearnAprCalculator } from './aprCalcs/yearnAprCalculator'
 import { type RewardCalculatorResult, TokenBreakdown } from './aprCalcs/types'
 
 export interface VaultAPRData {
@@ -22,12 +22,14 @@ export type { TokenBreakdown }
 
 export class DataCacheService {
   private yearnApi: YearnApiService
-  private sushiCalculator: SushiAprCalculator
+  // private sushiCalculator: SushiAprCalculator
+  private yearnAprCalculator: YearnAprCalculator
   private morphoCalculator: MorphoAprCalculator
 
   constructor() {
     this.yearnApi = new YearnApiService()
-    this.sushiCalculator = new SushiAprCalculator()
+    // this.sushiCalculator = new SushiAprCalculator()
+    this.yearnAprCalculator = new YearnAprCalculator()
     this.morphoCalculator = new MorphoAprCalculator()
   }
 
@@ -39,8 +41,9 @@ export class DataCacheService {
       )
 
       // Get APR data from each calculator
-      const [sushiAPRs, morphoAPRs] = await Promise.all([
-        this.sushiCalculator.calculateVaultAPRs(vaults),
+      const [yearnAPRs, morphoAPRs] = await Promise.all([
+        // this.sushiCalculator.calculateVaultAPRs(vaults),
+        this.yearnAprCalculator.calculateVaultAPRs(vaults),
         this.morphoCalculator.calculateVaultAPRs(vaults),
       ])
 
@@ -49,7 +52,7 @@ export class DataCacheService {
         .map((vault) => {
           try {
             const allResults = _.chain([
-              sushiAPRs[vault.address],
+              yearnAPRs[vault.address],
               morphoAPRs[vault.address],
             ])
               .flattenDeep()
@@ -120,12 +123,18 @@ export class DataCacheService {
         return { strategy: strat, debtRatio: 0, strategyRewardsAPR: 0 }
       }
 
-      const result = results.find((r) =>
-        isAddressEqual(
-          r.strategyAddress as `0x${string}`,
+      const result = results.find((r) => {
+        const addressToCheck =
+          'strategyAddress' in r && r.strategyAddress
+            ? r.strategyAddress
+            : 'vaultAddress' in r
+            ? (r as any).vaultAddress
+            : undefined
+        return isAddressEqual(
+          addressToCheck as `0x${string}`,
           strat.address as `0x${string}`
         )
-      )
+      })
 
       const strategyData = result?.breakdown
         ? {
@@ -146,7 +155,7 @@ export class DataCacheService {
           ...strat,
           ...strategyData,
         },
-        debtRatio: strat.details?.debtRatio ?? 0,
+        debtRatio: strat.details?.debtRatio ?? strat.details?.debtRatio ?? 0,
         strategyRewardsAPR: strategyData.strategyRewardsAPR,
       }
     })
@@ -160,12 +169,23 @@ export class DataCacheService {
       { totalApr: 0, totalDebtRatio: 0 }
     )
 
+    // Find vault-level APR result (where vaultAddress matches vault.address)
+    const vaultLevelResult = results.find(
+      (r) => 'vaultAddress' in r && r.vaultAddress === vault.address
+    )
+    const vaultLevelAPR = vaultLevelResult?.breakdown?.apr
+      ? vaultLevelResult.breakdown.apr / 100
+      : 0
+
+    // Add vault-level APR to totalApr
+    const combinedApr = totalApr + vaultLevelAPR
+
     const apr = vault.apr
       ? {
           ...vault.apr,
           extra: {
             ...(vault.apr.extra || {}),
-            katanaRewardsAPR: totalApr,
+            katanaRewardsAPR: combinedApr,
           },
         }
       : undefined
