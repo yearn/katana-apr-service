@@ -75,6 +75,12 @@ export default function Home(): React.ReactElement {
         </div>
 
         <div className="w-full flex flex-col items-center gap-2 mt-4">
+          <a
+            href="/quick-apys"
+            className="inline-block mb-4 px-5 py-2 bg-blue-600 dark:bg-blue-400 text-white dark:text-zinc-900 font-semibold rounded-full shadow hover:bg-blue-700 dark:hover:bg-blue-300 transition-colors"
+          >
+            View Quick APYs
+          </a>
           <h2 className="text-2xl font-semibold text-center text-zinc-800 dark:text-zinc-100">
             Source Code
           </h2>
