@@ -22,6 +22,7 @@ export interface RewardCalculatorResult {
 }
 
 export interface YearnRewardCalculatorResult {
+  vaultName: string
   vaultAddress: string
   poolType: string // e.g., 'morpho', 'steer'
   breakdown: TokenBreakdown
@@ -40,6 +41,7 @@ export interface Campaign {
 }
 
 export interface Opportunity {
+  name: string
   identifier: string
   campaigns?: Campaign[]
   apr?: number

@@ -35,15 +35,17 @@ export class DataCacheService {
 
   async generateVaultAPRData(): Promise<APRDataCache> {
     try {
+      console.log('\nGenerating vault APR data...\n----------------------')
       // get all vaults
       const vaults: YearnVault[] = await this.yearnApi.getVaults(
         config.katanaChainId
       )
 
       // Get APR data from each calculator
-      const [yearnAPRs, morphoAPRs] = await Promise.all([
+      const [yearnAPRs, fixedRateAPRs, morphoAPRs] = await Promise.all([
         // this.sushiCalculator.calculateVaultAPRs(vaults),
         this.yearnAprCalculator.calculateVaultAPRs(vaults),
+        this.yearnAprCalculator.calculateFixedRateVaultAPRs(vaults),
         this.morphoCalculator.calculateVaultAPRs(vaults),
       ])
 
@@ -53,11 +55,14 @@ export class DataCacheService {
           try {
             const allResults = _.chain([
               yearnAPRs[vault.address],
+              fixedRateAPRs[vault.address],
               morphoAPRs[vault.address],
             ])
               .flattenDeep()
               .compact()
               .value()
+
+            // console.log(`allResults for vault ${vault.address}:`, allResults)
 
             if (allResults.length === 0) {
               return [
@@ -169,16 +174,33 @@ export class DataCacheService {
       { totalApr: 0, totalDebtRatio: 0 }
     )
 
-    // Find vault-level APR result (where vaultAddress matches vault.address)
-    const vaultLevelResult = results.find(
+    // Find vault-level APR results (where vaultAddress matches vault.address)
+    const vaultLevelResults = results.filter(
       (r) => 'vaultAddress' in r && r.vaultAddress === vault.address
     )
-    const vaultLevelAPR = vaultLevelResult?.breakdown?.apr
-      ? vaultLevelResult.breakdown.apr / 100
-      : 0
+    console.dir(vaultLevelResults, { depth: null })
 
-    // Add vault-level APR to totalApr
-    const combinedApr = totalApr + vaultLevelAPR
+    // Separate results by pool type
+    const yearnResults = vaultLevelResults.filter((r) => r.poolType === 'yearn')
+    const fixedRateResults = vaultLevelResults.filter(
+      (r) => r.poolType === 'fixed rate'
+    )
+
+    // Calculate APRs for each type
+    const yearnVaultAPR = yearnResults.reduce(
+      (sum, result) =>
+        sum + (result.breakdown?.apr ? result.breakdown.apr / 100 : 0),
+      0
+    )
+
+    const fixedRateVaultAPR = fixedRateResults.reduce(
+      (sum, result) =>
+        sum + (result.breakdown?.apr ? result.breakdown.apr / 100 : 0),
+      0
+    )
+
+    // Add vault-level APRs to totalApr (only yearn type affects main total)
+    const combinedApr = totalApr + yearnVaultAPR
 
     const apr = vault.apr
       ? {
@@ -186,6 +208,9 @@ export class DataCacheService {
           extra: {
             ...(vault.apr.extra || {}),
             katanaRewardsAPR: combinedApr,
+            ...(fixedRateVaultAPR > 0 && {
+              FixedRateKatanaRewards: fixedRateVaultAPR,
+            }),
           },
         }
       : undefined
