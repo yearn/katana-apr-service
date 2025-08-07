@@ -20,6 +20,30 @@ export interface APRDataCache {
 
 export type { TokenBreakdown }
 
+const katanaBonusAPY: Record<
+  'yvvbETH' | 'yvvbUSDC' | 'yvvbUSDT' | 'AUSD' | 'yvvbWBTC' | 'yvvbUSDS',
+  number
+> = {
+  yvvbETH: 0.02,
+  yvvbUSDC: 0.08,
+  yvvbUSDT: 0.08,
+  AUSD: 0.08,
+  yvvbWBTC: 0.02,
+  yvvbUSDS: 0.0,
+}
+
+const vaultNativeRewards: Record<
+  'yvvbETH' | 'yvvbUSDC' | 'yvvbUSDT' | 'AUSD' | 'yvvbWBTC' | 'yvvbUSDS',
+  Record<string, number>
+> = {
+  yvvbETH: { 'Ethereum yield': 0.013, 'Katana yield': 0.027 },
+  yvvbUSDC: { 'Ethereum yield': 0.021, 'Katana yield': 0.03 },
+  yvvbUSDT: { 'Ethereum yield': 0.017, 'Katana yield': 0.03 },
+  AUSD: { 'T-bill yield': 0.035, 'Katana yield': 0.0 },
+  yvvbWBTC: { 'Ethereum yield': 0.0001, 'Katana yield': 0.008 },
+  yvvbUSDS: { 'Ethereum yield': 0.0, 'Katana yield': 0.0 },
+}
+
 export class DataCacheService {
   private yearnApi: YearnApiService
   // private sushiCalculator: SushiAprCalculator
@@ -202,18 +226,40 @@ export class DataCacheService {
     // Add vault-level APRs to totalApr (only yearn type affects main total)
     const combinedApr = totalApr + yearnVaultAPR
 
-    const apr = vault.apr
-      ? {
-          ...vault.apr,
-          extra: {
-            ...(vault.apr.extra || {}),
-            katanaRewardsAPR: combinedApr,
-            ...(fixedRateVaultAPR > 0 && {
-              FixedRateKatanaRewards: fixedRateVaultAPR,
-            }),
-          },
-        }
-      : undefined
+    // Get the katana bonus APY for this vault based on its symbol
+    const vaultKatanaBonusAPY =
+      katanaBonusAPY[vault.symbol as keyof typeof katanaBonusAPY] || 0
+
+    // Calculate extrinsicYield and katanaNativeYield
+    const nativeRewards =
+      vaultNativeRewards[vault.symbol as keyof typeof vaultNativeRewards]
+    let extrinsicYield = 0
+    let katanaNativeYield = 0
+
+    if (nativeRewards) {
+      const rewardValues = Object.values(nativeRewards)
+      const firstField = rewardValues[0] || 0
+      const secondField = rewardValues[1] || 0
+      const netAPR = vault.apr?.netAPR || 0
+
+      // extrinsicYield is always the first value
+      extrinsicYield = firstField
+
+      // katanaNativeYield is the greater of the second field or netAPR
+      katanaNativeYield = Math.max(secondField, netAPR)
+    }
+
+    const apr = {
+      ...vault.apr,
+      extra: {
+        ...(vault.apr?.extra || {}),
+        katanaAppRewardsAPR: combinedApr || 0,
+        FixedRateKatanaRewards: fixedRateVaultAPR || 0,
+        katanaBonusAPY: vaultKatanaBonusAPY,
+        extrinsicYield,
+        katanaNativeYield,
+      },
+    }
 
     const newVault: YearnVault = {
       address: vault.address,
