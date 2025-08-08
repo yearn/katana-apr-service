@@ -183,8 +183,6 @@ export const calculateYearnVaultRewardsAPR = (
         const isMatch =
           b.identifier &&
           b.identifier.toLowerCase() === String(campaignId).toLowerCase()
-        if (isMatch) {
-        }
         return isMatch
       })
 
