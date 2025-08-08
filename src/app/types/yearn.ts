@@ -26,6 +26,7 @@ export interface YearnStrategy {
 }
 
 export interface YearnVaultExtra {
+  katanaRewardsAPR?: number // legacy field
   katanaAppRewardsAPR?: number
   FixedRateKatanaRewards?: number
   katanaBonusAPY?: number
@@ -77,7 +78,7 @@ export interface YearnVault {
   address: string
   symbol: string
   name: string
-  chainId: number
+  chainID: number
   strategies: YearnStrategy[]
   apr?: YearnVaultAPY
   tvl?: YearnVaultTVL
