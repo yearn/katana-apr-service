@@ -169,9 +169,7 @@ export class DataCacheService {
           'strategyAddress' in r && r.strategyAddress
             ? r.strategyAddress
             : 'vaultAddress' in r
-            ? isYearnRewardCalculatorResult(r)
-              ? r.vaultAddress
-              : undefined
+            ? (r as unknown as YearnRewardCalculatorResult).vaultAddress
             : undefined
         return isAddressEqual(
           addressToCheck as `0x${string}`,
@@ -289,14 +287,4 @@ export class DataCacheService {
 
     return newVault
   }
-}
-
-function isYearnRewardCalculatorResult(
-  r: RewardCalculatorResult & Record<'vaultAddress', unknown>
-): r is RewardCalculatorResult & YearnRewardCalculatorResult {
-  return (
-    typeof r.vaultAddress === 'string' &&
-    'breakdown' in r &&
-    r.poolType === 'yearn'
-  )
 }
