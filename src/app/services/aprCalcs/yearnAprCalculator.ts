@@ -5,6 +5,18 @@ import { ContractReaderService } from '../contractReader'
 import type { APRCalculator, RewardCalculatorResult } from './types'
 import { calculateYearnVaultRewardsAPR } from './utils'
 
+/**
+ * Calculates the APRs for rewards that are forwarded directly to Yearn vaults,
+ * specifically addressing cases where Steer rewards are stuck at the strategies.
+ *
+ * @param vaults - An array of YearnVault objects representing the vaults for which to calculate forwarded APRs.
+ * @returns A promise that resolves to a record mapping each vault address (string) to an array of RewardCalculatorResult objects.
+ *
+ * @remarks
+ * This function fetches ERC20 log processor opportunities from the Merkl API,
+ * then calculates the APR for each provided vault using the `calculateYearnVaultRewardsAPR` utility.
+ * The results are returned as a mapping from vault address to calculated APR results.
+ */
 export class YearnAprCalculator implements APRCalculator {
   private merklApi: MerklApiService
   private yearnApi: YearnApiService
@@ -26,10 +38,32 @@ export class YearnAprCalculator implements APRCalculator {
     // Calculate APRs for each vault
     const resultEntries = vaults.map((vault) => {
       const vaultResults = calculateYearnVaultRewardsAPR(
+        vault.name,
         vault.address,
         yearnOpportunities,
         'yearn',
         WRAPPED_KAT_ADDRESS
+      )
+      return [vault.address, vaultResults]
+    })
+    return Object.fromEntries(resultEntries)
+  }
+
+  async calculateFixedRateVaultAPRs(
+    vaults: YearnVault[]
+  ): Promise<Record<string, RewardCalculatorResult[]>> {
+    const FixedRateOpportunities =
+      await this.merklApi.getErc20FixAprOpportunities()
+    const KAT_ADDRESS = '0x0161A31702d6CF715aaa912d64c6A190FD0093aa'
+
+    // Calculate APRs for each vault
+    const resultEntries = vaults.map((vault) => {
+      const vaultResults = calculateYearnVaultRewardsAPR(
+        vault.name,
+        vault.address,
+        FixedRateOpportunities,
+        'fixed rate',
+        KAT_ADDRESS
       )
       return [vault.address, vaultResults]
     })

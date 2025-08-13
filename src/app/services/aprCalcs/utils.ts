@@ -120,6 +120,7 @@ export const calculateStrategyAPR = (
  * If no opportunity or campaigns are found, returns a default result with 0 APR and null token details.
  * The final result combines token breakdowns by vault address.
  *
+ * @param vaultName - The name of the Yearn vault to calculate rewards for.
  * @param vaultAddress - The address of the Yearn vault to calculate rewards for.
  * @param opportunities - Array of available opportunities containing campaigns and APR records.
  * @param poolType - The type of pool (e.g., 'morpho') for which APR is being calculated.
@@ -128,6 +129,7 @@ export const calculateStrategyAPR = (
  *          or null if no opportunity is found for the vault address.
  */
 export const calculateYearnVaultRewardsAPR = (
+  vaultName: string,
   vaultAddress: string,
   opportunities: Opportunity[],
   poolType: string,
@@ -146,10 +148,11 @@ export const calculateYearnVaultRewardsAPR = (
   )
 
   if (!opportunity?.campaigns?.length) {
-    console.log(`No ${poolType} opportunity found for pool ${vaultAddress}`)
+    console.log(`No ${poolType} opportunity found for ${vaultName}`)
     // Return a result with 0 APR and null token details
     return [
       {
+        vaultName,
         vaultAddress,
         poolType,
         breakdown: {
@@ -165,39 +168,51 @@ export const calculateYearnVaultRewardsAPR = (
     ]
   }
 
-  // Find all campaigns with the specified rewardToken address
-  const targetCampaigns = opportunity.campaigns.filter((campaign: Campaign) => {
-    return isAddressEqual(
-      campaign.rewardToken.address as `0x${string}`,
-      targetRewardTokenAddress as `0x${string}`
-    )
-  })
-  console.log(
-    `Found ${targetCampaigns.length} campaigns for pool ${vaultAddress}`
-  )
-
+  // First check each campaign to see if its campaignId exists in aprRecord.breakdowns,
+  // then confirm the token matches
   const vaultAprValues: Array<{ apr: number; campaign: Campaign }> = []
   if (
-    targetCampaigns.length > 0 &&
     opportunity.aprRecord &&
-    Array.isArray(opportunity.aprRecord.breakdowns)
+    Array.isArray(opportunity.aprRecord.breakdowns) &&
+    opportunity.campaigns.length > 0
   ) {
-    for (const campaign of targetCampaigns) {
+    console.log(`\n${opportunity.name}\n------------`)
+    for (const campaign of opportunity.campaigns) {
       const campaignId = campaign.campaignId
-      const aprBreakdown = opportunity.aprRecord.breakdowns.find(
-        (b: any) =>
+      const aprBreakdown = opportunity.aprRecord.breakdowns.find((b: any) => {
+        const isMatch =
           b.identifier &&
           b.identifier.toLowerCase() === String(campaignId).toLowerCase()
-      )
+        return isMatch
+      })
+
+      // If campaign has APR breakdown and token matches, include it
       if (aprBreakdown && typeof aprBreakdown.value === 'number') {
-        vaultAprValues.push({ apr: aprBreakdown.value, campaign })
+        console.log(
+          `Campaign ${campaignId} - Token: ${campaign.rewardToken.address} (${campaign.rewardToken.symbol}), Target: ${targetRewardTokenAddress}, APR: ${aprBreakdown.value}`
+        )
+
+        const tokenMatches = isAddressEqual(
+          campaign.rewardToken.address as `0x${string}`,
+          targetRewardTokenAddress as `0x${string}`
+        )
+        console.log(`Token matches: ${tokenMatches}`)
+
+        if (tokenMatches) {
+          console.log(`Adding campaign ${campaignId} to vaultAprValues`)
+          vaultAprValues.push({ apr: aprBreakdown.value, campaign })
+        }
       }
     }
   }
+  console.log(
+    `Found ${vaultAprValues.length} campaigns with APR data for pool ${vaultAddress}`
+  )
 
   // Return all APR breakdowns for each matching campaign
   const tokenBreakdowns: YearnRewardCalculatorResult[] = vaultAprValues.map(
     ({ apr, campaign }) => ({
+      vaultName,
       vaultAddress,
       poolType,
       breakdown: {
@@ -211,7 +226,6 @@ export const calculateYearnVaultRewardsAPR = (
       },
     })
   )
-  console.dir(tokenBreakdowns, { depth: null })
 
   return combineTokenBreakdowns(tokenBreakdowns, 'vaultAddress')
 }
@@ -248,5 +262,6 @@ function combineTokenBreakdowns<
       combined[key] = { ...item }
     }
   }
+  // console.dir(combined, { depth: null })
   return Object.values(combined)
 }

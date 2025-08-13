@@ -5,7 +5,11 @@ import type { YearnVault } from '../types/index'
 import { YearnApiService } from './externalApis/yearnApi'
 import { MorphoAprCalculator } from './aprCalcs/morphoAprCalculator'
 import { YearnAprCalculator } from './aprCalcs/yearnAprCalculator'
-import { type RewardCalculatorResult, TokenBreakdown } from './aprCalcs/types'
+import {
+  type RewardCalculatorResult,
+  TokenBreakdown,
+  YearnRewardCalculatorResult,
+} from './aprCalcs/types'
 
 export interface VaultAPRData {
   name: string
@@ -15,35 +19,74 @@ export interface VaultAPRData {
 }
 
 export interface APRDataCache {
-  [vaultAddress: string]: VaultAPRData
+  [vaultAddress: string]: YearnVault
 }
 
 export type { TokenBreakdown }
 
+/**
+ * This is a bonus for users who do not withdraw from the vaults over a certain period of time.
+ * It is provided by the Katana team.
+ */
+const katanaBonusAPY: Record<
+  'yvvbETH' | 'yvvbUSDC' | 'yvvbUSDT' | 'AUSD' | 'yvvbWBTC' | 'yvvbUSDS',
+  number
+> = {
+  yvvbETH: 0.02,
+  yvvbUSDC: 0.08,
+  yvvbUSDT: 0.08,
+  AUSD: 0.08,
+  yvvbWBTC: 0.02,
+  yvvbUSDS: 0.0,
+}
+
+/**
+ * This is a guaranteed rate on the underlying APYs by the katana team for the vaults.
+ * The mainnet or tbill yields are extrinsic yields that are earned elsewhere.
+ * the katana yield is the netAPR value earned by the vault and if it does not hit the below
+ * thresholds, then the diference will be made up with KAT tokens valued at 1B FDV.
+ *
+ * The aggregateVaultResults() function will automatically calculate and display the larger
+ * or the katana yield or the netAPR value.
+ */
+const vaultNativeRewards: Record<
+  'yvvbETH' | 'yvvbUSDC' | 'yvvbUSDT' | 'AUSD' | 'yvvbWBTC' | 'yvvbUSDS',
+  Record<string, number>
+> = {
+  yvvbETH: { 'Ethereum yield': 0.013, 'Katana yield': 0.027 },
+  yvvbUSDC: { 'Ethereum yield': 0.021, 'Katana yield': 0.03 },
+  yvvbUSDT: { 'Ethereum yield': 0.017, 'Katana yield': 0.03 },
+  AUSD: { 'T-bill yield': 0.035, 'Katana yield': 0.0 },
+  yvvbWBTC: { 'Ethereum yield': 0.0001, 'Katana yield': 0.008 },
+  yvvbUSDS: { 'Ethereum yield': 0.0, 'Katana yield': 0.0 },
+}
+
+// Default FDV value
+const FDV = 1_000_000_000
+
 export class DataCacheService {
   private yearnApi: YearnApiService
-  // private sushiCalculator: SushiAprCalculator
   private yearnAprCalculator: YearnAprCalculator
   private morphoCalculator: MorphoAprCalculator
 
   constructor() {
     this.yearnApi = new YearnApiService()
-    // this.sushiCalculator = new SushiAprCalculator()
     this.yearnAprCalculator = new YearnAprCalculator()
     this.morphoCalculator = new MorphoAprCalculator()
   }
 
   async generateVaultAPRData(): Promise<APRDataCache> {
     try {
+      console.log('\nGenerating vault APR data...\n----------------------')
       // get all vaults
       const vaults: YearnVault[] = await this.yearnApi.getVaults(
         config.katanaChainId
       )
 
       // Get APR data from each calculator
-      const [yearnAPRs, morphoAPRs] = await Promise.all([
-        // this.sushiCalculator.calculateVaultAPRs(vaults),
+      const [yearnAPRs, fixedRateAPRs, morphoAPRs] = await Promise.all([
         this.yearnAprCalculator.calculateVaultAPRs(vaults),
+        this.yearnAprCalculator.calculateFixedRateVaultAPRs(vaults),
         this.morphoCalculator.calculateVaultAPRs(vaults),
       ])
 
@@ -53,6 +96,7 @@ export class DataCacheService {
           try {
             const allResults = _.chain([
               yearnAPRs[vault.address],
+              fixedRateAPRs[vault.address],
               morphoAPRs[vault.address],
             ])
               .flattenDeep()
@@ -101,7 +145,7 @@ export class DataCacheService {
     }
   }
 
-  async getVaultAPRData(vaultAddress: string): Promise<VaultAPRData | null> {
+  async getVaultAPRData(vaultAddress: string): Promise<YearnVault | null> {
     const cache = await this.generateVaultAPRData()
     return cache[vaultAddress] || null
   }
@@ -113,10 +157,7 @@ export class DataCacheService {
   private aggregateVaultResults(
     vault: YearnVault,
     results: RewardCalculatorResult[]
-  ): any {
-    // Default FDV value
-    const FDV = 1_000_000_000
-
+  ): YearnVault {
     // Build new strategies array with appended data from results
     const strategiesWithRewards = (vault.strategies || []).map((strat) => {
       if (!strat.address || strat.status?.toLowerCase() !== 'active') {
@@ -128,7 +169,7 @@ export class DataCacheService {
           'strategyAddress' in r && r.strategyAddress
             ? r.strategyAddress
             : 'vaultAddress' in r
-            ? (r as any).vaultAddress
+            ? (r as unknown as YearnRewardCalculatorResult).vaultAddress
             : undefined
         return isAddressEqual(
           addressToCheck as `0x${string}`,
@@ -169,32 +210,75 @@ export class DataCacheService {
       { totalApr: 0, totalDebtRatio: 0 }
     )
 
-    // Find vault-level APR result (where vaultAddress matches vault.address)
-    const vaultLevelResult = results.find(
+    // Find vault-level APR results (where vaultAddress matches vault.address)
+    const vaultLevelResults = results.filter(
       (r) => 'vaultAddress' in r && r.vaultAddress === vault.address
     )
-    const vaultLevelAPR = vaultLevelResult?.breakdown?.apr
-      ? vaultLevelResult.breakdown.apr / 100
-      : 0
+    console.dir(vaultLevelResults, { depth: null })
 
-    // Add vault-level APR to totalApr
-    const combinedApr = totalApr + vaultLevelAPR
+    // Separate results by pool type
+    const yearnResults = vaultLevelResults.filter((r) => r.poolType === 'yearn')
+    const fixedRateResults = vaultLevelResults.filter(
+      (r) => r.poolType === 'fixed rate'
+    )
 
-    const apr = vault.apr
-      ? {
-          ...vault.apr,
-          extra: {
-            ...(vault.apr.extra || {}),
-            katanaRewardsAPR: combinedApr,
-          },
-        }
-      : undefined
+    // Calculate APRs for each type
+    const yearnVaultAPR = yearnResults.reduce(
+      (sum, result) =>
+        sum + (result.breakdown?.apr ? result.breakdown.apr / 100 : 0),
+      0
+    )
+
+    const fixedRateVaultAPR = fixedRateResults.reduce(
+      (sum, result) =>
+        sum + (result.breakdown?.apr ? result.breakdown.apr / 100 : 0),
+      0
+    )
+
+    // Add vault-level APRs to totalApr (only yearn type affects main total)
+    const combinedApr = totalApr + yearnVaultAPR
+
+    // Get the katana bonus APY for this vault based on its symbol
+    const vaultKatanaBonusAPY =
+      katanaBonusAPY[vault.symbol as keyof typeof katanaBonusAPY] || 0
+
+    // Calculate extrinsicYield and katanaNativeYield
+    const nativeRewards =
+      vaultNativeRewards[vault.symbol as keyof typeof vaultNativeRewards]
+    let extrinsicYield = 0
+    let katanaNativeYield = 0
+
+    if (nativeRewards) {
+      const rewardValues = Object.values(nativeRewards)
+      const firstField = rewardValues[0] || 0
+      const secondField = rewardValues[1] || 0
+      const netAPR = vault.apr?.netAPR || 0
+
+      // extrinsicYield is always the first value
+      extrinsicYield = firstField
+
+      // katanaNativeYield is the greater of the second field or netAPR
+      katanaNativeYield = Math.max(secondField, netAPR)
+    }
+
+    const apr = {
+      ...vault.apr,
+      extra: {
+        ...(vault.apr?.extra || {}),
+        katanaRewardsAPR: combinedApr || 0, // legacy field
+        katanaAppRewardsAPR: combinedApr || 0, // new field
+        FixedRateKatanaRewards: fixedRateVaultAPR || 0,
+        katanaBonusAPY: vaultKatanaBonusAPY,
+        extrinsicYield,
+        katanaNativeYield,
+      },
+    }
 
     const newVault: YearnVault = {
       address: vault.address,
       symbol: vault.symbol,
       name: vault.name,
-      chainId: vault.chainId,
+      chainID: vault.chainID,
       token: vault.token,
       tvl: vault.tvl,
       apr,
