@@ -3,7 +3,6 @@ import { isAddressEqual } from 'viem'
 import { config } from '../config/index'
 import type { YearnVault } from '../types/index'
 import { YearnApiService } from './externalApis/yearnApi'
-import { MorphoAprCalculator } from './aprCalcs/morphoAprCalculator'
 import { YearnAprCalculator } from './aprCalcs/yearnAprCalculator'
 import {
   type RewardCalculatorResult,
@@ -67,12 +66,10 @@ const FDV = 1_000_000_000
 export class DataCacheService {
   private yearnApi: YearnApiService
   private yearnAprCalculator: YearnAprCalculator
-  private morphoCalculator: MorphoAprCalculator
 
   constructor() {
     this.yearnApi = new YearnApiService()
     this.yearnAprCalculator = new YearnAprCalculator()
-    this.morphoCalculator = new MorphoAprCalculator()
   }
 
   async generateVaultAPRData(): Promise<APRDataCache> {
@@ -84,10 +81,9 @@ export class DataCacheService {
       )
 
       // Get APR data from each calculator
-      const [yearnAPRs, fixedRateAPRs, morphoAPRs] = await Promise.all([
+      const [yearnAPRs, fixedRateAPRs] = await Promise.all([
         this.yearnAprCalculator.calculateVaultAPRs(vaults),
         this.yearnAprCalculator.calculateFixedRateVaultAPRs(vaults),
-        this.morphoCalculator.calculateVaultAPRs(vaults),
       ])
 
       // Aggregate results for each vault
@@ -97,7 +93,6 @@ export class DataCacheService {
             const allResults = _.chain([
               yearnAPRs[vault.address],
               fixedRateAPRs[vault.address],
-              morphoAPRs[vault.address],
             ])
               .flattenDeep()
               .compact()
@@ -161,7 +156,7 @@ export class DataCacheService {
     // Build new strategies array with appended data from results
     const strategiesWithRewards = (vault.strategies || []).map((strat) => {
       if (!strat.address || strat.status?.toLowerCase() !== 'active') {
-        return { strategy: strat, debtRatio: 0, strategyRewardsAPR: 0 }
+        return { strategy: strat, debtRatio: 0 }
       }
 
       const result = results.find((r) => {
@@ -179,16 +174,12 @@ export class DataCacheService {
 
       const strategyData = result?.breakdown
         ? {
-            strategyRewardsAPR: result.breakdown.apr / 100,
             rewardToken: { ...result.breakdown.token, assumedFDV: FDV },
             underlyingContract: result.poolAddress,
-            assumedFDV: FDV,
           }
         : {
-            strategyRewardsAPR: 0,
             rewardToken: undefined,
             underlyingContract: undefined,
-            assumedFDV: FDV,
           }
 
       return {
@@ -197,24 +188,13 @@ export class DataCacheService {
           ...strategyData,
         },
         debtRatio: strat.details?.debtRatio ?? strat.details?.debtRatio ?? 0,
-        strategyRewardsAPR: strategyData.strategyRewardsAPR,
       }
     })
-
-    // Calculate totals using reduce
-    const { totalApr } = strategiesWithRewards.reduce(
-      (acc, { debtRatio, strategyRewardsAPR }) => ({
-        totalApr: acc.totalApr + strategyRewardsAPR * (debtRatio / 10000),
-        totalDebtRatio: acc.totalDebtRatio + debtRatio,
-      }),
-      { totalApr: 0, totalDebtRatio: 0 }
-    )
 
     // Find vault-level APR results (where vaultAddress matches vault.address)
     const vaultLevelResults = results.filter(
       (r) => 'vaultAddress' in r && r.vaultAddress === vault.address
     )
-    console.dir(vaultLevelResults, { depth: null })
 
     // Separate results by pool type
     const yearnResults = vaultLevelResults.filter((r) => r.poolType === 'yearn')
@@ -223,7 +203,7 @@ export class DataCacheService {
     )
 
     // Calculate APRs for each type
-    const yearnVaultAPR = yearnResults.reduce(
+    const yearnVaultRewards = yearnResults.reduce(
       (sum, result) =>
         sum + (result.breakdown?.apr ? result.breakdown.apr / 100 : 0),
       0
@@ -234,9 +214,6 @@ export class DataCacheService {
         sum + (result.breakdown?.apr ? result.breakdown.apr / 100 : 0),
       0
     )
-
-    // Add vault-level APRs to totalApr (only yearn type affects main total)
-    const combinedApr = totalApr + yearnVaultAPR
 
     // Get the katana bonus APY for this vault based on its symbol
     const vaultKatanaBonusAPY =
@@ -265,8 +242,8 @@ export class DataCacheService {
       ...vault.apr,
       extra: {
         ...(vault.apr?.extra || {}),
-        katanaRewardsAPR: combinedApr || 0, // legacy field
-        katanaAppRewardsAPR: combinedApr || 0, // new field
+        katanaRewardsAPR: yearnVaultRewards || 0, // legacy field
+        katanaAppRewardsAPR: yearnVaultRewards || 0, // new field
         FixedRateKatanaRewards: fixedRateVaultAPR || 0,
         katanaBonusAPY: vaultKatanaBonusAPY,
         extrinsicYield,

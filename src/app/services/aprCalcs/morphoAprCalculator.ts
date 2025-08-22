@@ -73,7 +73,6 @@ export class MorphoAprCalculator implements APRCalculator {
       })
       .compact()
       .value() as Array<[string, RewardCalculatorResult[]]>
-    // console.dir(_.fromPairs(resultEntries), { depth: null })
     return _.fromPairs(resultEntries)
   }
 }

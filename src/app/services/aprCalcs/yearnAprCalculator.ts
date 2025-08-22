@@ -5,6 +5,12 @@ import { ContractReaderService } from '../contractReader'
 import type { APRCalculator, RewardCalculatorResult } from './types'
 import { calculateYearnVaultRewardsAPR } from './utils'
 
+const WRAPPED_KAT_ADDRESSES = [
+  '0x6E9C1F88a960fE63387eb4b71BC525a9313d8461', // v2WrappedKat,
+  '0x3ba1fbC4c3aEA775d335b31fb53778f46FD3a330', // v1WrappedKat
+  '0x0161A31702d6CF715aaa912d64c6A190FD0093aa', // KAT
+]
+
 /**
  * Calculates the APRs for rewards that are forwarded directly to Yearn vaults,
  * specifically addressing cases where Steer rewards are stuck at the strategies.
@@ -33,7 +39,6 @@ export class YearnAprCalculator implements APRCalculator {
   ): Promise<Record<string, RewardCalculatorResult[]>> {
     const yearnOpportunities =
       await this.merklApi.getErc20LogProcessorOpportunities()
-    const WRAPPED_KAT_ADDRESS = '0x6E9C1F88a960fE63387eb4b71BC525a9313d8461'
 
     // Calculate APRs for each vault
     const resultEntries = vaults.map((vault) => {
@@ -42,7 +47,8 @@ export class YearnAprCalculator implements APRCalculator {
         vault.address,
         yearnOpportunities,
         'yearn',
-        WRAPPED_KAT_ADDRESS
+        WRAPPED_KAT_ADDRESSES,
+        true // Enable logging for debugging
       )
       return [vault.address, vaultResults]
     })
@@ -54,7 +60,6 @@ export class YearnAprCalculator implements APRCalculator {
   ): Promise<Record<string, RewardCalculatorResult[]>> {
     const FixedRateOpportunities =
       await this.merklApi.getErc20FixAprOpportunities()
-    const KAT_ADDRESS = '0x0161A31702d6CF715aaa912d64c6A190FD0093aa'
 
     // Calculate APRs for each vault
     const resultEntries = vaults.map((vault) => {
@@ -63,7 +68,7 @@ export class YearnAprCalculator implements APRCalculator {
         vault.address,
         FixedRateOpportunities,
         'fixed rate',
-        KAT_ADDRESS
+        WRAPPED_KAT_ADDRESSES
       )
       return [vault.address, vaultResults]
     })
