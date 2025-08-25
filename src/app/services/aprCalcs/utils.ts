@@ -7,6 +7,24 @@ import type {
 } from './types'
 
 /**
+ * Shortens an Ethereum address to display format (0x1234...5678)
+ * @param address - The full Ethereum address
+ * @param startLength - Number of characters to show at start (default: 4)
+ * @param endLength - Number of characters to show at end (default: 4)
+ * @returns Shortened address string
+ */
+const shortenAddress = (
+  address: string,
+  startLength: number = 4,
+  endLength: number = 4
+): string => {
+  if (!address || address.length <= startLength + endLength + 2) {
+    return address
+  }
+  return `${address.slice(0, 2 + startLength)}...${address.slice(-endLength)}`
+}
+
+/**
  * Calculates the APR breakdown for a given strategy and pool, based on available opportunities and campaigns.
  *
  * This function searches for the matching opportunity by pool address, then filters campaigns by the target reward token.
@@ -28,7 +46,7 @@ export const calculateStrategyAPR = (
   targetRewardTokenAddress: string
 ): RewardCalculatorResult[] | null => {
   if (!poolAddress) {
-    console.log('no pool')
+    console.log(`🚫 No pool address provided`)
     return null
   }
 
@@ -40,7 +58,11 @@ export const calculateStrategyAPR = (
   )
 
   if (!opportunity?.campaigns?.length) {
-    console.log(`No ${poolType} opportunity found for pool ${poolAddress}`)
+    console.log(
+      `🔍 No ${poolType} opportunity found for pool ${shortenAddress(
+        poolAddress
+      )}`
+    )
     // Return a result with 0 APR and null token details
     return [
       {
@@ -78,7 +100,7 @@ export const calculateStrategyAPR = (
     for (const campaign of targetCampaigns) {
       const campaignId = campaign.campaignId
       const aprBreakdown = opportunity.aprRecord.breakdowns.find(
-        (b: any) =>
+        (b: { identifier?: string; value?: number }) =>
           b.identifier &&
           b.identifier.toLowerCase() === String(campaignId).toLowerCase()
       )
@@ -124,7 +146,8 @@ export const calculateStrategyAPR = (
  * @param vaultAddress - The address of the Yearn vault to calculate rewards for.
  * @param opportunities - Array of available opportunities containing campaigns and APR records.
  * @param poolType - The type of pool (e.g., 'morpho') for which APR is being calculated.
- * @param targetRewardTokenAddress - The address of the reward token to filter campaigns by.
+ * @param targetRewardTokenAddress - Array of addresses of the reward tokens to filter campaigns by.
+ * @param enableLogging - Whether to enable debug logging for this calculation.
  * @returns An array of YearnRewardCalculatorResult objects containing APR breakdowns for each matching campaign,
  *          or null if no opportunity is found for the vault address.
  */
@@ -133,12 +156,22 @@ export const calculateYearnVaultRewardsAPR = (
   vaultAddress: string,
   opportunities: Opportunity[],
   poolType: string,
-  targetRewardTokenAddress: string
+  targetRewardTokenAddress: string[],
+  enableLogging: boolean = false
 ): YearnRewardCalculatorResult[] | null => {
+  // Helper function to conditionally log
+  const log = (...args: Parameters<typeof console.log>) => {
+    if (enableLogging) {
+      console.log(...args)
+    }
+  }
+
   if (!vaultAddress) {
-    console.log('no vault')
+    log('🚫 No vault address provided')
     return null
   }
+
+  log(`\n👀 Analyzing vault: ${vaultName} (${shortenAddress(vaultAddress)})`)
 
   const opportunity = opportunities.find((opp) =>
     isAddressEqual(
@@ -147,8 +180,18 @@ export const calculateYearnVaultRewardsAPR = (
     )
   )
 
+  if (opportunity) {
+    log(`\n🎯 Found Opportunity: ${opportunity.name}`)
+    log('═'.repeat(50))
+  }
+
   if (!opportunity?.campaigns?.length) {
-    console.log(`No ${poolType} opportunity found for ${vaultName}`)
+    log(
+      `🔍 No ${poolType} opportunity found for vault: ${vaultName} (${shortenAddress(
+        vaultAddress
+      )})`
+    )
+    log('═'.repeat(50))
     // Return a result with 0 APR and null token details
     return [
       {
@@ -176,37 +219,54 @@ export const calculateYearnVaultRewardsAPR = (
     Array.isArray(opportunity.aprRecord.breakdowns) &&
     opportunity.campaigns.length > 0
   ) {
-    console.log(`\n${opportunity.name}\n------------`)
     for (const campaign of opportunity.campaigns) {
       const campaignId = campaign.campaignId
-      const aprBreakdown = opportunity.aprRecord.breakdowns.find((b: any) => {
-        const isMatch =
-          b.identifier &&
-          b.identifier.toLowerCase() === String(campaignId).toLowerCase()
-        return isMatch
-      })
+      const aprBreakdown = opportunity.aprRecord.breakdowns.find(
+        (b: { identifier?: string; value?: number }) => {
+          const isMatch =
+            b.identifier &&
+            b.identifier.toLowerCase() === String(campaignId).toLowerCase()
+          return isMatch
+        }
+      )
 
       // If campaign has APR breakdown and token matches, include it
       if (aprBreakdown && typeof aprBreakdown.value === 'number') {
-        console.log(
-          `Campaign ${campaignId} - Token: ${campaign.rewardToken.address} (${campaign.rewardToken.symbol}), Target: ${targetRewardTokenAddress}, APR: ${aprBreakdown.value}`
+        log(`📊 Campaign ${campaignId}:`)
+        log(
+          `   💰 Token: ${shortenAddress(campaign.rewardToken.address)} (${
+            campaign.rewardToken.symbol
+          })`
+        )
+        log(
+          `   🎯 Target Tokens: [${targetRewardTokenAddress
+            .map((addr) => shortenAddress(addr))
+            .join(', ')}]`
+        )
+        log(`   📈 APR: ${aprBreakdown.value.toFixed(4)}%`)
+
+        const tokenMatches = targetRewardTokenAddress.some((addr) =>
+          isAddressEqual(
+            campaign.rewardToken.address as `0x${string}`,
+            addr as `0x${string}`
+          )
         )
 
-        const tokenMatches = isAddressEqual(
-          campaign.rewardToken.address as `0x${string}`,
-          targetRewardTokenAddress as `0x${string}`
-        )
-        console.log(`Token matches: ${tokenMatches}`)
+        log(`   ${tokenMatches ? '✅' : '❌'} Token match: ${tokenMatches}`)
 
         if (tokenMatches) {
-          console.log(`Adding campaign ${campaignId} to vaultAprValues`)
+          log(`   ➕ Adding campaign ${campaignId} to vault APR values`)
           vaultAprValues.push({ apr: aprBreakdown.value, campaign })
         }
       }
     }
+
+    log('═'.repeat(50))
   }
-  console.log(
-    `Found ${vaultAprValues.length} campaigns with APR data for pool ${vaultAddress}`
+  log(
+    `📋 Summary: Found ${
+      vaultAprValues.length
+    } campaigns with APR data for vault ${shortenAddress(vaultAddress)}\n`
   )
 
   // Return all APR breakdowns for each matching campaign
@@ -262,6 +322,5 @@ function combineTokenBreakdowns<
       combined[key] = { ...item }
     }
   }
-  // console.dir(combined, { depth: null })
   return Object.values(combined)
 }
