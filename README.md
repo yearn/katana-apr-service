@@ -1,6 +1,6 @@
 # Katana APR Service
 
-This is a Next.js app that provides data for Yearn vaults on Katana via API endpoints. It is designed for serverless deployment (e.g., Vercel).
+This is a Next.js app that provides APR data for Yearn vaults on Katana via API endpoints. It is designed for serverless deployment (e.g., Vercel).
 
 ## Getting Started
 
