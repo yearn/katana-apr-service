@@ -60,6 +60,18 @@ const vaultNativeRewards: Record<
   yvvbUSDS: { 'Ethereum yield': 0.0, 'Katana yield': 0.0 },
 }
 
+const HARDCODED_FIXED_RATE_APR: Record<
+  'yvvbETH' | 'yvvbUSDC' | 'yvvbUSDT' | 'AUSD' | 'yvvbWBTC' | 'yvvbUSDS',
+  number
+> = {
+  yvvbETH: 0.14,
+  yvvbUSDC: 0.35,
+  yvvbUSDT: 0.35,
+  AUSD: 0.35,
+  yvvbWBTC: 0.07,
+  yvvbUSDS: 0.0,
+}
+
 // Default FDV value
 const FDV = 1_000_000_000
 
@@ -81,9 +93,12 @@ export class DataCacheService {
       )
 
       // Get APR data from each calculator
-      const [yearnAPRs, fixedRateAPRs] = await Promise.all([
+      const [
+        yearnAPRs,
+        // fixedRateAPRs
+      ] = await Promise.all([
         this.yearnAprCalculator.calculateVaultAPRs(vaults),
-        this.yearnAprCalculator.calculateFixedRateVaultAPRs(vaults),
+        // this.yearnAprCalculator.calculateFixedRateVaultAPRs(vaults),
       ])
 
       // Aggregate results for each vault
@@ -92,7 +107,7 @@ export class DataCacheService {
           try {
             const allResults = _.chain([
               yearnAPRs[vault.address],
-              fixedRateAPRs[vault.address],
+              // fixedRateAPRs[vault.address],
             ])
               .flattenDeep()
               .compact()
@@ -198,9 +213,6 @@ export class DataCacheService {
 
     // Separate results by pool type
     const yearnResults = vaultLevelResults.filter((r) => r.poolType === 'yearn')
-    const fixedRateResults = vaultLevelResults.filter(
-      (r) => r.poolType === 'fixed rate'
-    )
 
     // Calculate APRs for each type
     const yearnVaultRewards = yearnResults.reduce(
@@ -209,11 +221,21 @@ export class DataCacheService {
       0
     )
 
-    const fixedRateVaultAPR = fixedRateResults.reduce(
-      (sum, result) =>
-        sum + (result.breakdown?.apr ? result.breakdown.apr / 100 : 0),
-      0
-    )
+    // use this when fixed rate pools are live
+    // const fixedRateResults = vaultLevelResults.filter(
+    //   (r) => r.poolType === 'fixed rate'
+    // )
+    // const fixedRateVaultAPR = fixedRateResults.reduce(
+    //   (sum, result) =>
+    //     sum + (result.breakdown?.apr ? result.breakdown.apr / 100 : 0),
+    //   0
+    // )
+
+    // override with hardcoded values until new campaigns are live
+    const fixedRateFromHardcoded =
+      HARDCODED_FIXED_RATE_APR[
+        vault.symbol as keyof typeof HARDCODED_FIXED_RATE_APR
+      ] || 0
 
     // Get the katana bonus APY for this vault based on its symbol
     const vaultKatanaBonusAPY =
@@ -244,7 +266,7 @@ export class DataCacheService {
         ...(vault.apr?.extra || {}),
         katanaRewardsAPR: yearnVaultRewards || 0, // legacy field
         katanaAppRewardsAPR: yearnVaultRewards || 0, // new field
-        FixedRateKatanaRewards: fixedRateVaultAPR || 0,
+        FixedRateKatanaRewards: fixedRateFromHardcoded || 0,
         katanaBonusAPY: vaultKatanaBonusAPY,
         extrinsicYield,
         katanaNativeYield,
