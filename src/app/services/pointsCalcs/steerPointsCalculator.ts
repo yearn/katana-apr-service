@@ -19,21 +19,29 @@ export class SteerPointsCalculator {
   calculateForVault(vault: YearnVault): number {
     const strategies = vault.strategies ?? []
 
+    // Precompute lowercased keys with positive rates and a mapping
+    const positiveRateKeys = Object.entries(STEER_REWARD_RATES)
+      .filter(([_, rate]) => rate > 0)
+      .map(([key, _]) => key.toLowerCase())
+    const positiveRateMap: Record<string, number> = Object.entries(STEER_REWARD_RATES)
+      .filter(([_, rate]) => rate > 0)
+      .reduce((acc, [key, rate]) => {
+        acc[key.toLowerCase()] = rate
+        return acc
+      }, {} as Record<string, number>)
+
     const eligible = strategies.filter((s) => {
       const name = (s?.name ?? '').toLowerCase()
-      const hasMatch = Object.entries(STEER_REWARD_RATES).some(([key, rate]) => {
-        return rate > 0 && name.includes(key.toLowerCase())
-      })
+      const hasMatch = positiveRateKeys.some((key) => name.includes(key))
       const totalDebt = Number(s?.details?.totalDebt ?? 0)
       return hasMatch && totalDebt > 0
     })
 
     const total = eligible.reduce((sum, s) => {
       const name = (s?.name ?? '').toLowerCase()
-      const match = Object.entries(STEER_REWARD_RATES).find(
-        ([key, rate]) => rate > 0 && name.includes(key.toLowerCase())
-      )
-      const rate = match ? Number(match[1]) : 0
+      // Find the first matching key
+      const matchKey = positiveRateKeys.find((key) => name.includes(key))
+      const rate = matchKey ? Number(positiveRateMap[matchKey]) : 0
       const raw = Number(s?.details?.debtRatio ?? 0) // 10000 = 100%
       const debtRatio = Math.min(Math.max(raw / 10000, 0), 1)
       return sum + rate * debtRatio
