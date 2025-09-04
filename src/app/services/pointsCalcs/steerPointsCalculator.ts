@@ -21,10 +21,12 @@ export class SteerPointsCalculator {
 
     // Precompute lowercased keys with positive rates and a mapping
     const positiveRateKeys = Object.entries(STEER_REWARD_RATES)
-      .filter(([_, rate]) => rate > 0)
-      .map(([key, _]) => key.toLowerCase())
-    const positiveRateMap: Record<string, number> = Object.entries(STEER_REWARD_RATES)
-      .filter(([_, rate]) => rate > 0)
+      .filter(([, rate]) => rate > 0)
+      .map(([key]) => key.toLowerCase())
+    const positiveRateMap: Record<string, number> = Object.entries(
+      STEER_REWARD_RATES
+    )
+      .filter(([, rate]) => rate > 0)
       .reduce((acc, [key, rate]) => {
         acc[key.toLowerCase()] = rate
         return acc
@@ -50,4 +52,3 @@ export class SteerPointsCalculator {
     return total
   }
 }
-
