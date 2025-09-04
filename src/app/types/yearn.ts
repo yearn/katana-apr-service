@@ -32,6 +32,8 @@ export interface YearnVaultExtra {
   katanaBonusAPY?: number
   extrinsicYield?: number
   katanaNativeYield?: number
+  // Points per dollar invested from STEER allocations
+  steerPointsPerDollar?: number
 }
 
 export interface YearnVaultPricePerShare {

@@ -4,6 +4,7 @@ import { config } from '../config/index'
 import type { YearnVault } from '../types/index'
 import { YearnApiService } from './externalApis/yearnApi'
 import { YearnAprCalculator } from './aprCalcs/yearnAprCalculator'
+import { SteerPointsCalculator } from './pointsCalcs/steerPointsCalculator'
 import {
   type RewardCalculatorResult,
   TokenBreakdown,
@@ -78,10 +79,12 @@ const FDV = 1_000_000_000
 export class DataCacheService {
   private yearnApi: YearnApiService
   private yearnAprCalculator: YearnAprCalculator
+  private steerPointsCalculator: SteerPointsCalculator
 
   constructor() {
     this.yearnApi = new YearnApiService()
     this.yearnAprCalculator = new YearnAprCalculator()
+    this.steerPointsCalculator = new SteerPointsCalculator()
   }
 
   async generateVaultAPRData(): Promise<APRDataCache> {
@@ -270,6 +273,7 @@ export class DataCacheService {
         katanaBonusAPY: vaultKatanaBonusAPY,
         extrinsicYield,
         katanaNativeYield,
+        steerPointsPerDollar: this.steerPointsCalculator.calculateForVault(vault),
       },
     }
 
