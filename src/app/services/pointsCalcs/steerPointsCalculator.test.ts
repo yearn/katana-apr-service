@@ -2,7 +2,16 @@ import { describe, it, expect } from 'vitest'
 import { SteerPointsCalculator, STEER_REWARD_RATES } from './steerPointsCalculator'
 import type { YearnVault } from '../../types'
 
-function makeVault(strategies: Array<Partial<YearnVault['strategies'][number]>>): YearnVault {
+type MinimalStrategyInput = {
+  name?: string
+  address?: string
+  details?: {
+    totalDebt?: string | number
+    debtRatio?: number
+  }
+}
+
+function makeVault(strategies: Array<MinimalStrategyInput>): YearnVault {
   // Build a minimal YearnVault with only fields used by the calculator
   return {
     address: '0xvault',
@@ -60,4 +69,3 @@ describe('SteerPointsCalculator', () => {
     expect(calc.calculateForVault(vault)).toBe(0)
   })
 })
-

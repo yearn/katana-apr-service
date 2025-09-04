@@ -7,8 +7,6 @@ export default defineConfig({
     globals: true,
     // Avoid worker threads which can hang under some Bun setups
     pool: 'forks',
-    maxThreads: 1,
-    minThreads: 1,
     watch: false,
   },
   // Avoid loading project PostCSS/Tailwind config during isolated unit tests
