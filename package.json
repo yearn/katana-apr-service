@@ -6,7 +6,9 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "bunx vitest -c vitest.config.ts",
+    "test:run": "bunx vitest run -c vitest.config.ts"
   },
   "dependencies": {
     "@types/lodash": "^4.17.20",
@@ -29,6 +31,7 @@
     "eslint": "^9",
     "eslint-config-next": "15.3.5",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^2.0.0"
   }
 }
