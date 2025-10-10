@@ -50,7 +50,13 @@ const katanaBonusAPY: Record<
  * or the katana yield or the netAPR value.
  */
 const vaultNativeRewards: Record<
-  'yvvbETH' | 'yvvbUSDC' | 'yvvbUSDT' | 'AUSD' | 'yvvbWBTC' | 'yvvbUSDS',
+  | 'yvvbETH'
+  | 'yvvbUSDC'
+  | 'yvvbUSDT'
+  | 'AUSD'
+  | 'yvvbWBTC'
+  | 'yvvbUSDS'
+  | 'yvwstETH',
   Record<string, number>
 > = {
   yvvbETH: { 'Ethereum yield': 0.013, 'Katana yield': 0.027 },
@@ -59,10 +65,17 @@ const vaultNativeRewards: Record<
   AUSD: { 'T-bill yield': 0.035, 'Katana yield': 0.0 },
   yvvbWBTC: { 'Ethereum yield': 0.0001, 'Katana yield': 0.008 },
   yvvbUSDS: { 'Ethereum yield': 0.0, 'Katana yield': 0.0 },
+  yvwstETH: { 'Ethereum yield': 0.0, 'Katana yield': 0.0 },
 }
 
 const HARDCODED_FIXED_RATE_APR: Record<
-  'yvvbETH' | 'yvvbUSDC' | 'yvvbUSDT' | 'AUSD' | 'yvvbWBTC' | 'yvvbUSDS',
+  | 'yvvbETH'
+  | 'yvvbUSDC'
+  | 'yvvbUSDT'
+  | 'AUSD'
+  | 'yvvbWBTC'
+  | 'yvvbUSDS'
+  | 'yvwstETH',
   number
 > = {
   yvvbETH: 0.14,
@@ -71,6 +84,7 @@ const HARDCODED_FIXED_RATE_APR: Record<
   AUSD: 0.35,
   yvvbWBTC: 0.07,
   yvvbUSDS: 0.0,
+  yvwstETH: 0.0,
 }
 
 // Default FDV value
@@ -273,7 +287,8 @@ export class DataCacheService {
         katanaBonusAPY: vaultKatanaBonusAPY,
         extrinsicYield,
         katanaNativeYield,
-        steerPointsPerDollar: this.steerPointsCalculator.calculateForVault(vault),
+        steerPointsPerDollar:
+          this.steerPointsCalculator.calculateForVault(vault),
       },
     }
 
