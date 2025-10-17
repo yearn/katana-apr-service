@@ -32,11 +32,11 @@ const katanaBonusAPY: Record<
   'yvvbETH' | 'yvvbUSDC' | 'yvvbUSDT' | 'AUSD' | 'yvvbWBTC' | 'yvvbUSDS',
   number
 > = {
-  yvvbETH: 0.02,
-  yvvbUSDC: 0.08,
-  yvvbUSDT: 0.08,
-  AUSD: 0.08,
-  yvvbWBTC: 0.02,
+  yvvbETH: 0.016,
+  yvvbUSDC: 0.068,
+  yvvbUSDT: 0.068,
+  AUSD: 0.068,
+  yvvbWBTC: 0.016,
   yvvbUSDS: 0.0,
 }
 
@@ -273,7 +273,8 @@ export class DataCacheService {
         katanaBonusAPY: vaultKatanaBonusAPY,
         extrinsicYield,
         katanaNativeYield,
-        steerPointsPerDollar: this.steerPointsCalculator.calculateForVault(vault),
+        steerPointsPerDollar:
+          this.steerPointsCalculator.calculateForVault(vault),
       },
     }
 
