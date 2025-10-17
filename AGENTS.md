@@ -2,46 +2,20 @@
 
 ## Project Structure & Module Organization
 
-- `src/app`: Next.js App Router entry.
-  - `api/*/route.ts`: HTTP endpoints (e.g., `src/app/api/vaults/route.ts`).
-  - `services/`: APR calculation, external API, and on-chain helpers (e.g., `dataCache.ts`, `aprCalcs/*`).
-  - `config/`: Runtime configuration and chain setup.
-  - `types/`: Shared TypeScript types and contract ABIs.
-- `public/`: Static assets.
-- Root configs: `eslint.config.mjs`, `next.config.ts`, `tsconfig.json`, `.env.example`.
+Core application code lives in `src/app`, using the Next.js App Router. API handlers sit under `src/app/api`, while shared DTOs and helper types reside in `src/app/types`. Business logic is grouped by concern within `src/app/services` (`aprCalcs`, `pointsCalcs`, `externalApis`, caching utilities), so keep new computations alongside their peers. Configuration helpers stay in `src/app/config`, and example payloads for the marketing surface belong in `src/app/quick-apys`. Static assets (favicons, images) should be added to `public`, not embedded in source files.
 
 ## Build, Test, and Development Commands
 
-- `npm run dev`: Start local dev server with Turbopack.
-- `npm run build`: Create production build.
-- `npm start`: Run the production server locally.
-- `npm run lint`: Lint the codebase using ESLint.
-Examples:
-- Run the health check: `curl http://localhost:3000/api/health`
-- Fetch APR data: `curl http://localhost:3000/api/vaults`
+Install dependencies with `bun install` (the lockfile tracks Bun). Use `bun run dev` for the Turbopack-powered local server, and visit `http://localhost:3000` for the landing page and API explorer. Run `bun run build` to produce the production bundle, `bun run start` to serve it locally, `bun run lint` to apply Next.js + TypeScript ESLint rules, and `bun run test` for watch mode unit tests. Prefer `bun run test:run` in CI or when you need a deterministic, single-pass run.
 
 ## Coding Style & Naming Conventions
 
-- Language: TypeScript + React (Next.js App Router).
-- Linting: ESLint (`next/core-web-vitals`, `next/typescript`, `@typescript-eslint`). Fix warnings before PR.
-- Naming: PascalCase for classes, camelCase for functions/vars, file names in `services/` use lowerCamelCase (e.g., `dataCache.ts`).
-- Modules: Prefer named exports; keep files focused and small.
-- API routes follow Next.js convention: `src/app/api/<name>/route.ts` with `GET`, `OPTIONS`, etc.
+This codebase favors concise, typed modules: new files should be TypeScript-first and export explicit types. Follow the existing two-space indentation and trailing comma style you see in `src/app/page.tsx`. Components and hooks use `PascalCase` and `camelCase` respectively; computed constants should be `UPPER_SNAKE_CASE` only when shared across modules. Allow ESLint to guide edge cases (`next/typescript`, `@typescript-eslint/recommended`); run `bun run lint` before sending reviews to catch boundary warnings (`no-explicit-any`, `explicit-module-boundary-types`).
 
 ## Testing Guidelines
 
-- No formal test runner is configured. Validate endpoints via `curl` or API clients.
-- Add targeted unit tests if introducing complex logic; colocate under the feature directory or propose a test setup in your PR.
-- Ensure `npm run lint` and `npm run build` pass before pushing.
+Vitest powers unit coverage. Co-locate tests with their subjects using the `*.test.ts` suffix (see `src/app/services/pointsCalcs/steerPointsCalculator.test.ts` for the pattern). Structure suites with `describe` blocks that mirror the module surface, and prefer arranging fixtures with lightweight helpers over hard-coded constants. Run `bun run test` during development and ensure `bun run test:run` passes before opening a pull request; include focused assertions for every branch that manipulates APR or points math.
 
 ## Commit & Pull Request Guidelines
 
-- Commit style: conventional prefixes observed in history (`feat:`, `fix:`, `chore:`). Use imperative mood and concise scope.
-- Branch naming: short, descriptive; optional type prefix (e.g., `feat--quick-apys-page`).
-- PRs must include: clear description, rationale, screenshots for UI changes, reproduction steps for bug fixes, and linked issues.
-- Checklist: updated docs if needed, no secrets committed, `.env.example` updated when adding new env vars, lint/build passing.
-
-## Security & Configuration Tips
-
-- Copy `.env.example` to `.env` and set `RPC_URL_KATANA`, `YDAEMON_BASE_URI`, `MERKL_BASE_URI` as needed. Never commit real secrets.
-- Review `src/app/config` for chain IDs and endpoints before deploying.
+Commit history uses short, lowercase prefixes (`fix:`, `chore:`, `test/build:`). Follow that convention and write imperative summaries that explain the change, not the outcome. Each pull request should: describe the user-facing impact, reference relevant issues or incident tickets, list testing performed (commands and results), and attach screenshots or sample responses when API output changes. Request review from a maintainer in `@yearn`; keep PRs focused on a single feature or bug to speed review.
