@@ -1,6 +1,5 @@
 import type { YearnVault } from '../../types'
 
-// Mirrors Yearn X app configuration
 // Key match is case-insensitive against strategy.name
 export const STEER_REWARD_RATES: Record<string, number> = {
   'weETH-vbETH': 2,
