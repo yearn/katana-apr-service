@@ -23,16 +23,26 @@ All API routes are defined in `src/app/api/`.
 #### Example Usage
 
 ```bash
-curl http://localhost:3000/api/katana-apr
+curl -i http://localhost:3000/api/vaults
 ```
 
-Response:
+Useful response headers:
+
+- `X-Cache`: `HIT` / `MISS` / `EXPIRED` / `REFRESH` / `STALE` / `ERROR`
+- `X-Generated-At`: when the APR snapshot was generated
+- `X-Cache-TTL-Seconds`: in-process TTL used by the serverless function
+
+To force a refresh (requires `APR_SERVICE_REFRESH_TOKEN`):
+
+```bash
+curl -i -H "x-refresh-token: $APR_SERVICE_REFRESH_TOKEN" "http://localhost:3000/api/vaults?refresh=1"
+```
+
+Response body:
 
 ```json
 {
-  "vaults": [
-    // ...vault APR data
-  ]
+  "0x...": { "...": "..." }
 }
 ```
 
