@@ -26,17 +26,9 @@ All API routes are defined in `src/app/api/`.
 curl -i http://localhost:3000/api/vaults
 ```
 
-Useful response headers:
+Caching:
 
-- `X-Cache`: `HIT` / `MISS` / `EXPIRED` / `REFRESH` / `STALE` / `ERROR`
-- `X-Generated-At`: when the APR snapshot was generated
-- `X-Cache-TTL-Seconds`: in-process TTL used by the serverless function
-
-To force a refresh (requires `APR_SERVICE_REFRESH_TOKEN`):
-
-```bash
-curl -i -H "x-refresh-token: $APR_SERVICE_REFRESH_TOKEN" "http://localhost:3000/api/vaults?refresh=1"
-```
+Responses from `GET /api/vaults` are cacheable at the edge/CDN via `Cache-Control` (`s-maxage` + `stale-while-revalidate`). You can inspect cache behavior using standard headers like `Age` (and Vercel headers when deployed).
 
 Response body:
 
