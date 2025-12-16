@@ -30,12 +30,16 @@ export async function GET(): Promise<NextResponse> {
     return NextResponse.json(data, { status: 200, headers })
   } catch (error) {
     const err = error as Error
+    const errorHeaders: Record<string, string> = {
+      ...getCORSHeaders(),
+      'Cache-Control': 'no-store',
+    }
     return NextResponse.json(
       {
         message: 'An error occurred while fetching data.',
         error: err.message,
       },
-      { status: 502, headers }
+      { status: 502, headers: errorHeaders }
     )
   }
 }
