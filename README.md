@@ -23,16 +23,18 @@ All API routes are defined in `src/app/api/`.
 #### Example Usage
 
 ```bash
-curl http://localhost:3000/api/katana-apr
+curl -i http://localhost:3000/api/vaults
 ```
 
-Response:
+Caching:
+
+Responses from `GET /api/vaults` are cacheable at the edge/CDN via `Cache-Control` (`s-maxage` + `stale-while-revalidate`). You can inspect cache behavior using standard headers like `Age` (and Vercel headers when deployed).
+
+Response body:
 
 ```json
 {
-  "vaults": [
-    // ...vault APR data
-  ]
+  "0x...": { "...": "..." }
 }
 ```
 

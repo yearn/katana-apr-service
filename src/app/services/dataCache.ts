@@ -102,52 +102,40 @@ export class DataCacheService {
   }
 
   async generateVaultAPRData(): Promise<APRDataCache> {
-    try {
-      console.log('\nGenerating vault APR data...\n----------------------')
-      // get all vaults
-      const vaults: YearnVault[] = await this.yearnApi.getVaults(
-        config.katanaChainId
+    console.log('\nGenerating vault APR data...\n----------------------')
+    // get all vaults
+    const vaults: YearnVault[] = await this.yearnApi.getVaults(
+      config.katanaChainId
+    )
+
+    if (vaults.length === 0) {
+      throw new Error(
+        `No vaults returned from yDaemon (chainId=${config.katanaChainId})`
       )
+    }
 
-      // Get APR data from each calculator
-      const [
-        yearnAPRs,
-        // fixedRateAPRs
-      ] = await Promise.all([
-        this.yearnAprCalculator.calculateVaultAPRs(vaults),
-        // this.yearnAprCalculator.calculateFixedRateVaultAPRs(vaults),
-      ])
+    // Get APR data from each calculator
+    const [
+      yearnAPRs,
+      // fixedRateAPRs
+    ] = await Promise.all([
+      this.yearnAprCalculator.calculateVaultAPRs(vaults),
+      // this.yearnAprCalculator.calculateFixedRateVaultAPRs(vaults),
+    ])
 
-      // Aggregate results for each vault
-      const aprDataCache: APRDataCache = _.chain(vaults)
-        .map((vault) => {
-          try {
-            const allResults = _.chain([
-              yearnAPRs[vault.address],
-              // fixedRateAPRs[vault.address],
-            ])
-              .flattenDeep()
-              .compact()
-              .value()
+    // Aggregate results for each vault
+    const aprDataCache: APRDataCache = _.chain(vaults)
+      .map((vault) => {
+        try {
+          const allResults = _.chain([
+            yearnAPRs[vault.address],
+            // fixedRateAPRs[vault.address],
+          ])
+            .flattenDeep()
+            .compact()
+            .value()
 
-            if (allResults.length === 0) {
-              return [
-                vault.address,
-                {
-                  name: vault.name,
-                  apr: 0,
-                  pools: undefined,
-                  breakdown: [],
-                },
-              ]
-            }
-
-            return [
-              vault.address,
-              this.aggregateVaultResults(vault, allResults),
-            ]
-          } catch (error) {
-            console.error(`Error processing vault ${vault.address}:`, error)
+          if (allResults.length === 0) {
             return [
               vault.address,
               {
@@ -158,18 +146,28 @@ export class DataCacheService {
               },
             ]
           }
-        })
-        .fromPairs()
-        .value()
 
-      console.log(
-        `Generated APR data for ${Object.keys(aprDataCache).length} vaults`
-      )
-      return aprDataCache
-    } catch (error) {
-      console.error('Error generating vault APR data:', error)
-      return {}
-    }
+          return [vault.address, this.aggregateVaultResults(vault, allResults)]
+        } catch (error) {
+          console.error(`Error processing vault ${vault.address}:`, error)
+          return [
+            vault.address,
+            {
+              name: vault.name,
+              apr: 0,
+              pools: undefined,
+              breakdown: [],
+            },
+          ]
+        }
+      })
+      .fromPairs()
+      .value()
+
+    console.log(
+      `Generated APR data for ${Object.keys(aprDataCache).length} vaults`
+    )
+    return aprDataCache
   }
 
   async getVaultAPRData(vaultAddress: string): Promise<YearnVault | null> {
