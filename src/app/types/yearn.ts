@@ -30,7 +30,6 @@ export interface YearnVaultExtra {
   katanaAppRewardsAPR?: number
   FixedRateKatanaRewards?: number
   katanaBonusAPY?: number
-  extrinsicYield?: number
   katanaNativeYield?: number
   // Points per dollar invested from STEER allocations
   steerPointsPerDollar?: number

@@ -40,34 +40,6 @@ const katanaBonusAPY: Record<
   yvvbUSDS: 0.0,
 }
 
-/**
- * This is a guaranteed rate on the underlying APYs by the katana team for the vaults.
- * The mainnet or tbill yields are extrinsic yields that are earned elsewhere.
- * the katana yield is the netAPR value earned by the vault and if it does not hit the below
- * thresholds, then the diference will be made up with KAT tokens valued at 1B FDV.
- *
- * The aggregateVaultResults() function will automatically calculate and display the larger
- * or the katana yield or the netAPR value.
- */
-const vaultNativeRewards: Record<
-  | 'yvvbETH'
-  | 'yvvbUSDC'
-  | 'yvvbUSDT'
-  | 'AUSD'
-  | 'yvvbWBTC'
-  | 'yvvbUSDS'
-  | 'yvwstETH',
-  Record<string, number>
-> = {
-  yvvbETH: { 'Ethereum yield': 0.013, 'Katana yield': 0.027 },
-  yvvbUSDC: { 'Ethereum yield': 0.021, 'Katana yield': 0.03 },
-  yvvbUSDT: { 'Ethereum yield': 0.017, 'Katana yield': 0.03 },
-  AUSD: { 'T-bill yield': 0.035, 'Katana yield': 0.0 },
-  yvvbWBTC: { 'Ethereum yield': 0.0001, 'Katana yield': 0.008 },
-  yvvbUSDS: { 'Ethereum yield': 0.0, 'Katana yield': 0.0 },
-  yvwstETH: { 'Ethereum yield': 0.0, 'Katana yield': 0.0 },
-}
-
 const HARDCODED_FIXED_RATE_APR: Record<
   | 'yvvbETH'
   | 'yvvbUSDC'
@@ -256,24 +228,8 @@ export class DataCacheService {
     const vaultKatanaBonusAPY =
       katanaBonusAPY[vault.symbol as keyof typeof katanaBonusAPY] || 0
 
-    // Calculate extrinsicYield and katanaNativeYield
-    const nativeRewards =
-      vaultNativeRewards[vault.symbol as keyof typeof vaultNativeRewards]
-    let extrinsicYield = 0
-    let katanaNativeYield = 0
-
-    if (nativeRewards) {
-      const rewardValues = Object.values(nativeRewards)
-      const firstField = rewardValues[0] || 0
-      const secondField = rewardValues[1] || 0
-      const netAPR = vault.apr?.netAPR || 0
-
-      // extrinsicYield is always the first value
-      extrinsicYield = firstField
-
-      // katanaNativeYield is the greater of the second field or netAPR
-      katanaNativeYield = Math.max(secondField, netAPR)
-    }
+    // katanaNativeYield is the greater of the second field or netAPR
+    const katanaNativeYield = vault.apr?.netAPR || 0
 
     const apr = {
       ...vault.apr,
@@ -283,7 +239,6 @@ export class DataCacheService {
         katanaAppRewardsAPR: yearnVaultRewards || 0, // new field
         FixedRateKatanaRewards: fixedRateFromHardcoded || 0,
         katanaBonusAPY: vaultKatanaBonusAPY,
-        extrinsicYield,
         katanaNativeYield,
         steerPointsPerDollar:
           this.steerPointsCalculator.calculateForVault(vault),
