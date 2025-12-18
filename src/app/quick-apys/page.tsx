@@ -13,7 +13,6 @@ type VaultDisplay = {
   katanaAppRewardsAPR: string
   fixedRateKatanaRewards: string
   katanaBonusAPY: string
-  extrinsicYield: string
   katanaNativeYield: string
   totalAPR: string
 }
@@ -82,7 +81,6 @@ export default function QuickAPYs(): React.ReactElement {
           const fixedRateKatanaRewards =
             vault.apr?.extra?.FixedRateKatanaRewards || 0
           const katanaBonusAPY = vault.apr?.extra?.katanaBonusAPY || 0
-          const extrinsicYield = vault.apr?.extra?.extrinsicYield || 0
           const katanaNativeYield = vault.apr?.extra?.katanaNativeYield || 0
 
           // Calculate total APR as sum of all components
@@ -91,7 +89,6 @@ export default function QuickAPYs(): React.ReactElement {
             katanaAppRewardsAPR +
             fixedRateKatanaRewards +
             katanaBonusAPY +
-            extrinsicYield +
             katanaNativeYield
 
           return {
@@ -102,7 +99,6 @@ export default function QuickAPYs(): React.ReactElement {
             katanaAppRewardsAPR: (katanaAppRewardsAPR * 100).toFixed(2),
             fixedRateKatanaRewards: (fixedRateKatanaRewards * 100).toFixed(2),
             katanaBonusAPY: (katanaBonusAPY * 100).toFixed(2),
-            extrinsicYield: (extrinsicYield * 100).toFixed(2),
             katanaNativeYield: (katanaNativeYield * 100).toFixed(2),
             totalAPR: (totalAPR * 100).toFixed(2),
           }
@@ -187,9 +183,6 @@ export default function QuickAPYs(): React.ReactElement {
                       </td>
                       <td className="px-2 py-2 border-b border-zinc-200 dark:border-zinc-800 text-right text-sm">
                         {vault.katanaBonusAPY}%
-                      </td>
-                      <td className="px-2 py-2 border-b border-zinc-200 dark:border-zinc-800 text-right text-sm">
-                        {vault.extrinsicYield}%
                       </td>
                       <td className="px-2 py-2 border-b border-zinc-200 dark:border-zinc-800 text-right text-sm">
                         {vault.katanaNativeYield}%
