@@ -156,9 +156,6 @@ export default function QuickAPYs(): React.ReactElement {
                       Bonus APY (%)
                     </th>
                     <th className="px-2 py-2 border-b border-zinc-300 dark:border-zinc-700 text-right text-sm">
-                      Extrinsic Yield (%)
-                    </th>
-                    <th className="px-2 py-2 border-b border-zinc-300 dark:border-zinc-700 text-right text-sm">
                       Native Yield (%)
                     </th>
                     <th className="px-2 py-2 border-b border-zinc-300 dark:border-zinc-700 text-right text-sm font-bold">
