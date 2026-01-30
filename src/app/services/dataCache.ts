@@ -77,12 +77,12 @@ export class DataCacheService {
     console.log('\nGenerating vault APR data...\n----------------------')
     // get all vaults
     const vaults: YearnVault[] = await this.yearnApi.getVaults(
-      config.katanaChainId
+      config.katanaChainId,
     )
 
     if (vaults.length === 0) {
       throw new Error(
-        `No vaults returned from yDaemon (chainId=${config.katanaChainId})`
+        `No vaults returned from yDaemon (chainId=${config.katanaChainId})`,
       )
     }
 
@@ -137,7 +137,7 @@ export class DataCacheService {
       .value()
 
     console.log(
-      `Generated APR data for ${Object.keys(aprDataCache).length} vaults`
+      `Generated APR data for ${Object.keys(aprDataCache).length} vaults`,
     )
     return aprDataCache
   }
@@ -153,7 +153,7 @@ export class DataCacheService {
 
   private aggregateVaultResults(
     vault: YearnVault,
-    results: RewardCalculatorResult[]
+    results: RewardCalculatorResult[],
   ): YearnVault {
     // Build new strategies array with appended data from results
     const strategiesWithRewards = (vault.strategies || []).map((strat) => {
@@ -166,11 +166,11 @@ export class DataCacheService {
           'strategyAddress' in r && r.strategyAddress
             ? r.strategyAddress
             : 'vaultAddress' in r
-            ? (r as unknown as YearnRewardCalculatorResult).vaultAddress
-            : undefined
+              ? (r as unknown as YearnRewardCalculatorResult).vaultAddress
+              : undefined
         return isAddressEqual(
           addressToCheck as `0x${string}`,
-          strat.address as `0x${string}`
+          strat.address as `0x${string}`,
         )
       })
 
@@ -193,9 +193,12 @@ export class DataCacheService {
       }
     })
 
+    /**
+     * temp turned off while rewards are messed up
+     *  
     // Find vault-level APR results (where vaultAddress matches vault.address)
     const vaultLevelResults = results.filter(
-      (r) => 'vaultAddress' in r && r.vaultAddress === vault.address
+      (r) => 'vaultAddress' in r && r.vaultAddress === vault.address,
     )
 
     // Separate results by pool type
@@ -205,8 +208,9 @@ export class DataCacheService {
     const yearnVaultRewards = yearnResults.reduce(
       (sum, result) =>
         sum + (result.breakdown?.apr ? result.breakdown.apr / 100 : 0),
-      0
+      0,
     )
+    */
 
     // use this when fixed rate pools are live
     // const fixedRateResults = vaultLevelResults.filter(
@@ -235,8 +239,10 @@ export class DataCacheService {
       ...vault.apr,
       extra: {
         ...(vault.apr?.extra || {}),
-        katanaRewardsAPR: yearnVaultRewards || 0, // legacy field
-        katanaAppRewardsAPR: yearnVaultRewards || 0, // new field
+        // katanaRewardsAPR: yearnVaultRewards || 0, // legacy field
+        // katanaAppRewardsAPR: yearnVaultRewards || 0, // new field
+        katanaRewardsAPR: 0, // temp override while rewards are messed up and we fix
+        katanaAppRewardsAPR: 0, // temp override while rewards are messed up and we fix
         FixedRateKatanaRewards: fixedRateFromHardcoded || 0,
         katanaBonusAPY: vaultKatanaBonusAPY,
         katanaNativeYield,
