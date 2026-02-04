@@ -193,9 +193,6 @@ export class DataCacheService {
       }
     })
 
-    /**
-     * temp turned off while rewards are messed up
-     *  
     // Find vault-level APR results (where vaultAddress matches vault.address)
     const vaultLevelResults = results.filter(
       (r) => 'vaultAddress' in r && r.vaultAddress === vault.address,
@@ -210,7 +207,6 @@ export class DataCacheService {
         sum + (result.breakdown?.apr ? result.breakdown.apr / 100 : 0),
       0,
     )
-    */
 
     // use this when fixed rate pools are live
     // const fixedRateResults = vaultLevelResults.filter(
@@ -239,10 +235,8 @@ export class DataCacheService {
       ...vault.apr,
       extra: {
         ...(vault.apr?.extra || {}),
-        // katanaRewardsAPR: yearnVaultRewards || 0, // legacy field
-        // katanaAppRewardsAPR: yearnVaultRewards || 0, // new field
-        katanaRewardsAPR: 0, // temp override while rewards are messed up and we fix
-        katanaAppRewardsAPR: 0, // temp override while rewards are messed up and we fix
+        katanaRewardsAPR: yearnVaultRewards || 0, // legacy field
+        katanaAppRewardsAPR: yearnVaultRewards || 0, // new field
         FixedRateKatanaRewards: fixedRateFromHardcoded || 0,
         katanaBonusAPY: vaultKatanaBonusAPY,
         katanaNativeYield,
