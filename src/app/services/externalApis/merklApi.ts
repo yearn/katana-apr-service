@@ -2,11 +2,40 @@ import axios from 'axios'
 import { config } from '../../config'
 import type { MerklOpportunity } from '../../types'
 
+const EXCLUDED_CAMPAIGN_IDS = new Set([
+  '0x487022e5f413f60e3e6aa251712f9c2d6601f01d14b565e779a61b68c173bd6c',
+  '0xc5a22d022154d5c64ff14b2f4071f134eb83cf159f9f846ad0ba0908a755e86d',
+])
+
 export class MerklApiService {
   private apiUrl: string
 
   constructor() {
     this.apiUrl = config.merklApiUrl
+  }
+
+  private filterCampaigns(
+    opportunities: MerklOpportunity[],
+  ): MerklOpportunity[] {
+    return opportunities.map((opportunity) => {
+      if (!opportunity.campaigns?.length) {
+        return opportunity
+      }
+
+      const filteredCampaigns = opportunity.campaigns.filter((campaign) => {
+        const campaignId = campaign.campaignId?.toLowerCase()
+        return !campaignId || !EXCLUDED_CAMPAIGN_IDS.has(campaignId)
+      })
+
+      if (filteredCampaigns.length === opportunity.campaigns.length) {
+        return opportunity
+      }
+
+      return {
+        ...opportunity,
+        campaigns: filteredCampaigns,
+      }
+    })
   }
 
   async getSushiOpportunities(): Promise<MerklOpportunity[]> {
@@ -27,7 +56,7 @@ export class MerklApiService {
         ? response.data
         : response.data.opportunities || []
 
-      return opportunities
+      return this.filterCampaigns(opportunities)
     } catch (error) {
       console.error('Error fetching Sushi opportunities:', error)
       return []
@@ -52,7 +81,7 @@ export class MerklApiService {
         ? response.data
         : response.data.opportunities || []
 
-      return opportunities
+      return this.filterCampaigns(opportunities)
     } catch (error) {
       console.error('Error fetching Morpho opportunities:', error)
       return []
@@ -87,7 +116,7 @@ export class MerklApiService {
         ? response.data
         : response.data.opportunities || []
 
-      return opportunities
+      return this.filterCampaigns(opportunities)
     } catch (error) {
       console.error('Error fetching Yearn opportunities:', error)
       return []
@@ -125,7 +154,7 @@ export class MerklApiService {
         ? response.data
         : response.data.opportunities || []
 
-      return opportunities
+      return this.filterCampaigns(opportunities)
     } catch (error) {
       console.error('Error fetching ERC20 Log Processor opportunities:', error)
       return []
@@ -160,7 +189,7 @@ export class MerklApiService {
         ? response.data
         : response.data.opportunities || []
 
-      return opportunities
+      return this.filterCampaigns(opportunities)
     } catch (error) {
       console.error('Error fetching ERC20 Log Processor opportunities:', error)
       return []

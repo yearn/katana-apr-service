@@ -6,6 +6,7 @@ export interface MerklRewardToken {
 }
 
 export interface MerklCampaign {
+  campaignId?: string
   amount: string
   rewardToken: MerklRewardToken
   startTimestamp: number
