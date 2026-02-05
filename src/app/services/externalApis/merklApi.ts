@@ -2,10 +2,23 @@ import axios from 'axios'
 import { config } from '../../config'
 import type { MerklOpportunity } from '../../types'
 
-const EXCLUDED_CAMPAIGN_IDS = new Set([
-  '0x487022e5f413f60e3e6aa251712f9c2d6601f01d14b565e779a61b68c173bd6c',
-  '0xc5a22d022154d5c64ff14b2f4071f134eb83cf159f9f846ad0ba0908a755e86d',
-])
+const EXCLUDED_IDENTIFIER_SUFFIXES = new Set(['JUMPER'])
+
+const extractIdentifierSuffix = (identifier: string): string | null => {
+  const match = identifier.match(/^0x[a-fA-F0-9]{40}(.*)$/)
+  if (!match) {
+    return null
+  }
+  const rawSuffix = match[1]
+  if (!rawSuffix) {
+    return null
+  }
+  const cleanedSuffix = rawSuffix.replace(/^[^a-zA-Z0-9]+/, '')
+  if (!cleanedSuffix) {
+    return null
+  }
+  return cleanedSuffix.toUpperCase()
+}
 
 export class MerklApiService {
   private apiUrl: string
@@ -17,24 +30,9 @@ export class MerklApiService {
   private filterCampaigns(
     opportunities: MerklOpportunity[],
   ): MerklOpportunity[] {
-    return opportunities.map((opportunity) => {
-      if (!opportunity.campaigns?.length) {
-        return opportunity
-      }
-
-      const filteredCampaigns = opportunity.campaigns.filter((campaign) => {
-        const campaignId = campaign.campaignId?.toLowerCase()
-        return !campaignId || !EXCLUDED_CAMPAIGN_IDS.has(campaignId)
-      })
-
-      if (filteredCampaigns.length === opportunity.campaigns.length) {
-        return opportunity
-      }
-
-      return {
-        ...opportunity,
-        campaigns: filteredCampaigns,
-      }
+    return opportunities.filter((opportunity) => {
+      const suffix = extractIdentifierSuffix(opportunity.identifier)
+      return !(suffix && EXCLUDED_IDENTIFIER_SUFFIXES.has(suffix))
     })
   }
 
