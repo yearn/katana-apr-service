@@ -126,10 +126,11 @@ export class MerklApiService {
   /**
    * Fetches ERC20 Log Processor opportunities from the Merkl API.
    *
-   * Sends a GET request to the `/v4/opportunities/campaigns` endpoint with the specified parameters:
+   * Sends a GET request to the `/v4/opportunities` endpoint with the specified parameters:
    * - `status`: 'LIVE'
    * - `chainId`: from configuration
    * - `type`: 'ERC20LOGPROCESSOR'
+   * - `campaigns`: true
    *
    * Handles responses that may either be a direct array of `MerklOpportunity` objects or an object containing an `opportunities` array.
    * In case of an error, logs the error and returns an empty array.
@@ -138,11 +139,12 @@ export class MerklApiService {
    */
   async getErc20LogProcessorOpportunities(): Promise<MerklOpportunity[]> {
     try {
-      const url: string = `${this.apiUrl}/v4/opportunities/campaigns`
+      const url: string = `${this.apiUrl}/v4/opportunities`
       const params = {
         status: 'LIVE',
         chainId: config.katanaChainId,
         type: 'ERC20LOGPROCESSOR',
+        campaigns: true,
       }
 
       const response = await axios.get<
@@ -164,8 +166,9 @@ export class MerklApiService {
   /**
    * Fetches ERC20 fixed APR opportunities from the Merkl API.
    *
-   * This method sends a GET request to the `/v4/opportunities/campaigns` endpoint,
+   * This method sends a GET request to the `/v4/opportunities` endpoint,
    * filtering for opportunities with status 'LIVE', the configured chain ID, and type 'ERC20_FIX_APR'.
+   * It also requests campaigns with `campaigns: true`.
    * The response may be either an array of `MerklOpportunity` objects or an object containing an `opportunities` array.
    * In case of an error, an empty array is returned and the error is logged to the console.
    *
@@ -173,11 +176,12 @@ export class MerklApiService {
    */
   async getErc20FixAprOpportunities(): Promise<MerklOpportunity[]> {
     try {
-      const url: string = `${this.apiUrl}/v4/opportunities/campaigns`
+      const url: string = `${this.apiUrl}/v4/opportunities`
       const params = {
         status: 'LIVE',
         chainId: config.katanaChainId,
         type: 'ERC20_FIX_APR',
+        campaigns: true,
       }
 
       const response = await axios.get<
