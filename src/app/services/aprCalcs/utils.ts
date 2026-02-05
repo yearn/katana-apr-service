@@ -1,4 +1,4 @@
-import { isAddressEqual } from 'viem'
+import { isAddress, isAddressEqual } from 'viem'
 import type {
   Campaign,
   Opportunity,
@@ -22,6 +22,31 @@ const shortenAddress = (
     return address
   }
   return `${address.slice(0, 2 + startLength)}...${address.slice(-endLength)}`
+}
+
+const safeIsAddressEqual = (left?: string, right?: string): boolean => {
+  if (!left || !right) {
+    return false
+  }
+  if (!isAddress(left) || !isAddress(right)) {
+    return false
+  }
+  return isAddressEqual(left as `0x${string}`, right as `0x${string}`)
+}
+
+const identifierMatchesAddress = (
+  identifier?: string,
+  address?: string
+): boolean => {
+  if (!identifier || !address) {
+    return false
+  }
+  const normalizedIdentifier = identifier.toLowerCase()
+  const normalizedAddress = address.toLowerCase()
+  return (
+    normalizedIdentifier === normalizedAddress ||
+    normalizedIdentifier.startsWith(normalizedAddress)
+  )
 }
 
 /**
@@ -51,10 +76,7 @@ export const calculateStrategyAPR = (
   }
 
   const opportunity = opportunities.find((opp) =>
-    isAddressEqual(
-      opp.identifier as `0x${string}`,
-      poolAddress as `0x${string}`
-    )
+    identifierMatchesAddress(opp.identifier, poolAddress)
   )
 
   if (!opportunity?.campaigns?.length) {
@@ -85,9 +107,9 @@ export const calculateStrategyAPR = (
   // Find all campaigns with the specified rewardToken address
 
   const targetCampaigns = opportunity.campaigns.filter((campaign: Campaign) => {
-    return isAddressEqual(
-      campaign.rewardToken.address as `0x${string}`,
-      targetRewardTokenAddress as `0x${string}`
+    return safeIsAddressEqual(
+      campaign.rewardToken.address,
+      targetRewardTokenAddress
     )
   })
 
@@ -174,10 +196,7 @@ export const calculateYearnVaultRewardsAPR = (
   log(`\n👀 Analyzing vault: ${vaultName} (${shortenAddress(vaultAddress)})`)
 
   const opportunity = opportunities.find((opp) =>
-    isAddressEqual(
-      opp.identifier as `0x${string}`,
-      vaultAddress as `0x${string}`
-    )
+    identifierMatchesAddress(opp.identifier, vaultAddress)
   )
 
   if (opportunity) {
@@ -246,10 +265,7 @@ export const calculateYearnVaultRewardsAPR = (
         log(`   📈 APR: ${aprBreakdown.value.toFixed(4)}%`)
 
         const tokenMatches = targetRewardTokenAddress.some((addr) =>
-          isAddressEqual(
-            campaign.rewardToken.address as `0x${string}`,
-            addr as `0x${string}`
-          )
+          safeIsAddressEqual(campaign.rewardToken.address, addr)
         )
 
         log(`   ${tokenMatches ? '✅' : '❌'} Token match: ${tokenMatches}`)
