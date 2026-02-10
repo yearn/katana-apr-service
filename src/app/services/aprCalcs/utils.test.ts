@@ -116,7 +116,7 @@ describe('calculateYearnVaultRewardsAPR', () => {
     )
   })
 
-  it('returns an empty list when campaigns have no APR breakdown match', () => {
+  it('returns a zero placeholder when campaigns have no APR breakdown match', () => {
     const results = calculateYearnVaultRewardsAPR(
       'Vault',
       VAULT_ADDRESS,
@@ -131,7 +131,22 @@ describe('calculateYearnVaultRewardsAPR', () => {
       [WRAPPED_KAT_ADDRESS],
     )
 
-    expect(results).toEqual([])
+    expect(results).toEqual([
+      {
+        vaultName: 'Vault',
+        vaultAddress: VAULT_ADDRESS,
+        poolType: 'yearn',
+        breakdown: {
+          apr: 0,
+          token: {
+            address: '',
+            symbol: '',
+            decimals: 0,
+          },
+          weight: 0,
+        },
+      },
+    ])
     expect(mocks.logVaultAprDebug).toHaveBeenCalledWith(
       expect.objectContaining({
         stage: 'campaign_apr_match',
@@ -146,7 +161,7 @@ describe('calculateYearnVaultRewardsAPR', () => {
     )
   })
 
-  it('returns an empty list when APR exists but reward token is filtered out', () => {
+  it('returns a zero placeholder when APR exists but reward token is filtered out', () => {
     const results = calculateYearnVaultRewardsAPR(
       'Vault',
       VAULT_ADDRESS,
@@ -168,7 +183,22 @@ describe('calculateYearnVaultRewardsAPR', () => {
       [WRAPPED_KAT_ADDRESS],
     )
 
-    expect(results).toEqual([])
+    expect(results).toEqual([
+      {
+        vaultName: 'Vault',
+        vaultAddress: VAULT_ADDRESS,
+        poolType: 'yearn',
+        breakdown: {
+          apr: 0,
+          token: {
+            address: '',
+            symbol: '',
+            decimals: 0,
+          },
+          weight: 0,
+        },
+      },
+    ])
     expect(mocks.logVaultAprDebug).toHaveBeenCalledWith(
       expect.objectContaining({
         stage: 'token_filter',

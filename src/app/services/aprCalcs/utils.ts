@@ -180,6 +180,23 @@ export const calculateYearnVaultRewardsAPR = (
   poolType: string,
   targetRewardTokenAddress: string[]
 ): YearnRewardCalculatorResult[] | null => {
+  const zeroPlaceholderResult: YearnRewardCalculatorResult[] = [
+    {
+      vaultName,
+      vaultAddress,
+      poolType,
+      breakdown: {
+        apr: 0,
+        token: {
+          address: '',
+          symbol: '',
+          decimals: 0,
+        },
+        weight: 0,
+      },
+    },
+  ]
+
   if (!vaultAddress) {
     logVaultAprDebug({
       stage: 'result_summary',
@@ -218,22 +235,7 @@ export const calculateYearnVaultRewardsAPR = (
       reason,
     })
     // Return a result with 0 APR and null token details
-    return [
-      {
-        vaultName,
-        vaultAddress,
-        poolType,
-        breakdown: {
-          apr: 0,
-          token: {
-            address: '',
-            symbol: '',
-            decimals: 0,
-          },
-          weight: 0,
-        },
-      },
-    ]
+    return zeroPlaceholderResult
   }
 
   const aprBreakdowns = Array.isArray(opportunity.aprRecord?.breakdowns)
@@ -343,6 +345,10 @@ export const calculateYearnVaultRewardsAPR = (
         ? 'apr_calculated'
         : 'no_matching_campaigns_after_filters',
   })
+
+  if (combined.length === 0) {
+    return zeroPlaceholderResult
+  }
 
   return combined
 }
