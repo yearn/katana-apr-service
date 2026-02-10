@@ -1,6 +1,7 @@
 import axios from 'axios'
 import dotenv from 'dotenv'
 import { isAddress } from 'viem'
+import { isExcludedCampaignId } from '../src/app/services/externalApis/merklBlacklist'
 
 dotenv.config()
 
@@ -209,7 +210,11 @@ const parseArgs = (): {
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i]
     if (arg === '--vault') {
-      vaultAddress = args[i + 1]
+      const nextArg = args[i + 1]
+      if (!nextArg || nextArg.startsWith('--')) {
+        throw new Error('--vault requires a valid 0x address value')
+      }
+      vaultAddress = nextArg
       i += 1
       continue
     }
@@ -261,6 +266,28 @@ const fetchYearnVaults = async (): Promise<YearnVault[]> => {
   return response.data || []
 }
 
+const applyCampaignBlacklist = (
+  opportunities: MerklOpportunity[]
+): MerklOpportunity[] =>
+  opportunities.map((opportunity) => {
+    if (!opportunity.campaigns?.length) {
+      return opportunity
+    }
+
+    const filteredCampaigns = opportunity.campaigns.filter(
+      (campaign) => !isExcludedCampaignId(campaign.campaignId)
+    )
+
+    if (filteredCampaigns.length === opportunity.campaigns.length) {
+      return opportunity
+    }
+
+    return {
+      ...opportunity,
+      campaigns: filteredCampaigns,
+    }
+  })
+
 const fetchMerklOpportunities = async (): Promise<MerklOpportunity[]> => {
   const response = await axios.get<
     MerklOpportunity[] | { opportunities: MerklOpportunity[] }
@@ -273,9 +300,11 @@ const fetchMerklOpportunities = async (): Promise<MerklOpportunity[]> => {
     },
   })
 
-  return Array.isArray(response.data)
+  const opportunities = Array.isArray(response.data)
     ? response.data
     : response.data.opportunities || []
+
+  return applyCampaignBlacklist(opportunities)
 }
 
 const buildSummary = (

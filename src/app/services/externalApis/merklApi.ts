@@ -3,11 +3,7 @@ import { config } from '../../config'
 import type { MerklOpportunity } from '../../types'
 import { isAddress } from 'viem'
 import { logVaultAprDebug } from '../aprCalcs/debugLogger'
-
-const EXCLUDED_CAMPAIGN_IDS = new Set([
-  '0x487022e5f413f60e3e6aa251712f9c2d6601f01d14b565e779a61b68c173bd6c',
-  '0xc5a22d022154d5c64ff14b2f4071f134eb83cf159f9f846ad0ba0908a755e86d',
-])
+import { isExcludedCampaignId } from './merklBlacklist'
 
 const extractAddressFromIdentifier = (
   identifier?: string
@@ -38,9 +34,11 @@ export class MerklApiService {
       const removedCampaignIds: string[] = []
       const filteredCampaigns = opportunity.campaigns.filter((campaign) => {
         const campaignId = campaign.campaignId?.toLowerCase()
-        const isExcluded = !!campaignId && EXCLUDED_CAMPAIGN_IDS.has(campaignId)
+        const isExcluded = isExcludedCampaignId(campaign.campaignId)
         if (isExcluded) {
-          removedCampaignIds.push(campaignId)
+          if (campaignId) {
+            removedCampaignIds.push(campaignId)
+          }
         }
         return !isExcluded
       })
