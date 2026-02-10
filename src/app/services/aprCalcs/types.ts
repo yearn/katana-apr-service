@@ -52,3 +52,38 @@ export interface Opportunity {
     }>
   }
 }
+
+export type VaultAprDebugStage =
+  | 'vault_fetch'
+  | 'opportunity_fetch'
+  | 'opportunity_lookup'
+  | 'campaign_scan'
+  | 'campaign_apr_match'
+  | 'token_filter'
+  | 'result_summary'
+  | 'fallback'
+
+export interface VaultAprDebugEvent {
+  stage: VaultAprDebugStage
+  vaultAddress?: string
+  vaultName?: string
+  vaultSymbol?: string
+  chainId?: number
+  poolType?: string
+  opportunityType?: string
+  opportunityIdentifier?: string
+  opportunitiesTotal?: number
+  campaignId?: string
+  campaignsTotal?: number
+  aprBreakdownsTotal?: number
+  rewardTokenAddress?: string
+  rewardTokenSymbol?: string
+  aprBreakdownMatched?: boolean
+  tokenMatched?: boolean
+  aprValue?: number
+  acceptedCampaigns?: number
+  totalVaults?: number
+  withResults?: number
+  fallbackCount?: number
+  reason?: string
+}

@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "test": "bunx vitest -c vitest.config.ts",
-    "test:run": "bunx vitest run -c vitest.config.ts"
+    "test:run": "bunx vitest run -c vitest.config.ts",
+    "test:vault-debug:live": "bun scripts/debug-vault-live.ts"
   },
   "dependencies": {
     "@types/lodash": "^4.17.20",

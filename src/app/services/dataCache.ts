@@ -5,6 +5,7 @@ import type { YearnVault } from '../types/index'
 import { YearnApiService } from './externalApis/yearnApi'
 import { YearnAprCalculator } from './aprCalcs/yearnAprCalculator'
 import { SteerPointsCalculator } from './pointsCalcs/steerPointsCalculator'
+import { logVaultAprDebug } from './aprCalcs/debugLogger'
 import {
   type RewardCalculatorResult,
   TokenBreakdown,
@@ -108,6 +109,13 @@ export class DataCacheService {
             .value()
 
           if (allResults.length === 0) {
+            logVaultAprDebug({
+              stage: 'fallback',
+              vaultAddress: vault.address,
+              vaultName: vault.name,
+              vaultSymbol: vault.symbol,
+              reason: 'empty_results_after_calculation',
+            })
             return [
               vault.address,
               {
@@ -119,9 +127,25 @@ export class DataCacheService {
             ]
           }
 
+          logVaultAprDebug({
+            stage: 'result_summary',
+            vaultAddress: vault.address,
+            vaultName: vault.name,
+            vaultSymbol: vault.symbol,
+            acceptedCampaigns: allResults.length,
+            reason: 'vault_results_aggregated',
+          })
+
           return [vault.address, this.aggregateVaultResults(vault, allResults)]
         } catch (error) {
           console.error(`Error processing vault ${vault.address}:`, error)
+          logVaultAprDebug({
+            stage: 'fallback',
+            vaultAddress: vault.address,
+            vaultName: vault.name,
+            vaultSymbol: vault.symbol,
+            reason: 'exception_while_processing_vault',
+          })
           return [
             vault.address,
             {

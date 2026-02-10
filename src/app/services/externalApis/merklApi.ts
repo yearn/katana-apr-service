@@ -1,11 +1,24 @@
 import axios from 'axios'
 import { config } from '../../config'
 import type { MerklOpportunity } from '../../types'
+import { isAddress } from 'viem'
+import { logVaultAprDebug } from '../aprCalcs/debugLogger'
 
 const EXCLUDED_CAMPAIGN_IDS = new Set([
   '0x487022e5f413f60e3e6aa251712f9c2d6601f01d14b565e779a61b68c173bd6c',
   '0xc5a22d022154d5c64ff14b2f4071f134eb83cf159f9f846ad0ba0908a755e86d',
 ])
+
+const extractAddressFromIdentifier = (
+  identifier?: string
+): string | undefined => {
+  if (!identifier) {
+    return undefined
+  }
+
+  const candidate = identifier.slice(0, 42)
+  return isAddress(candidate) ? candidate : undefined
+}
 
 export class MerklApiService {
   private apiUrl: string
@@ -156,7 +169,28 @@ export class MerklApiService {
         ? response.data
         : response.data.opportunities || []
 
-      return this.filterCampaigns(opportunities)
+      const filteredOpportunities = this.filterCampaigns(opportunities)
+      for (const opportunity of filteredOpportunities) {
+        const vaultAddress = extractAddressFromIdentifier(
+          opportunity.identifier
+        )
+        if (!vaultAddress) {
+          continue
+        }
+
+        logVaultAprDebug({
+          stage: 'opportunity_fetch',
+          vaultAddress,
+          poolType: 'yearn',
+          opportunityType: 'ERC20LOGPROCESSOR',
+          opportunityIdentifier: opportunity.identifier,
+          opportunitiesTotal: filteredOpportunities.length,
+          campaignsTotal: opportunity.campaigns?.length || 0,
+          reason: 'merkl_opportunity_loaded',
+        })
+      }
+
+      return filteredOpportunities
     } catch (error) {
       console.error('Error fetching ERC20 Log Processor opportunities:', error)
       return []
@@ -193,7 +227,28 @@ export class MerklApiService {
         ? response.data
         : response.data.opportunities || []
 
-      return this.filterCampaigns(opportunities)
+      const filteredOpportunities = this.filterCampaigns(opportunities)
+      for (const opportunity of filteredOpportunities) {
+        const vaultAddress = extractAddressFromIdentifier(
+          opportunity.identifier
+        )
+        if (!vaultAddress) {
+          continue
+        }
+
+        logVaultAprDebug({
+          stage: 'opportunity_fetch',
+          vaultAddress,
+          poolType: 'fixed rate',
+          opportunityType: 'ERC20_FIX_APR',
+          opportunityIdentifier: opportunity.identifier,
+          opportunitiesTotal: filteredOpportunities.length,
+          campaignsTotal: opportunity.campaigns?.length || 0,
+          reason: 'merkl_opportunity_loaded',
+        })
+      }
+
+      return filteredOpportunities
     } catch (error) {
       console.error('Error fetching ERC20 Log Processor opportunities:', error)
       return []
