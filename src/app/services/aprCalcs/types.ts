@@ -47,14 +47,15 @@ export interface Opportunity {
   apr?: number
   aprRecord?: {
     breakdowns?: Array<{
-      identifier: string
-      value: number
+      identifier?: string
+      value?: number
     }>
   }
 }
 
 export type VaultAprDebugStage =
   | 'vault_fetch'
+  | 'blacklist_filter'
   | 'opportunity_fetch'
   | 'opportunity_lookup'
   | 'campaign_scan'
@@ -82,6 +83,9 @@ export interface VaultAprDebugEvent {
   tokenMatched?: boolean
   aprValue?: number
   acceptedCampaigns?: number
+  blacklistedCampaigns?: number
+  blacklistedCampaignIds?: string[]
+  blacklistedAprBreakdownCampaignIds?: string[]
   totalVaults?: number
   withResults?: number
   fallbackCount?: number

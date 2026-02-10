@@ -265,8 +265,11 @@ export const calculateYearnVaultRewardsAPR = (
           b.identifier.toLowerCase() === String(campaignId).toLowerCase()
       )
 
-      const aprBreakdownMatched =
-        !!aprBreakdown && typeof aprBreakdown.value === 'number'
+      const aprValue =
+        aprBreakdown && typeof aprBreakdown.value === 'number'
+          ? aprBreakdown.value
+          : undefined
+      const aprBreakdownMatched = aprValue !== undefined
 
       logVaultAprDebug({
         stage: 'campaign_apr_match',
@@ -278,13 +281,13 @@ export const calculateYearnVaultRewardsAPR = (
         rewardTokenAddress: campaign.rewardToken.address,
         rewardTokenSymbol: campaign.rewardToken.symbol,
         aprBreakdownMatched,
-        aprValue: aprBreakdownMatched ? aprBreakdown.value : undefined,
+        aprValue,
         reason: aprBreakdownMatched
           ? 'campaign_apr_breakdown_found'
           : 'campaign_apr_breakdown_missing',
       })
 
-      if (!aprBreakdownMatched) {
+      if (aprValue === undefined) {
         continue
       }
 
@@ -302,12 +305,12 @@ export const calculateYearnVaultRewardsAPR = (
         rewardTokenAddress: campaign.rewardToken.address,
         rewardTokenSymbol: campaign.rewardToken.symbol,
         tokenMatched: tokenMatches,
-        aprValue: aprBreakdown.value,
+        aprValue,
         reason: tokenMatches ? 'reward_token_allowed' : 'reward_token_filtered',
       })
 
       if (tokenMatches) {
-        vaultAprValues.push({ apr: aprBreakdown.value, campaign })
+        vaultAprValues.push({ apr: aprValue, campaign })
       }
     }
   }

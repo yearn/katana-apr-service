@@ -50,6 +50,7 @@ bun run test:vault-debug:live -- --all --limit 100
 ## Debug Stages in Service Logs
 
 - `vault_fetch`
+- `blacklist_filter`
 - `opportunity_fetch`
 - `opportunity_lookup`
 - `campaign_scan`

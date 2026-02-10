@@ -17,6 +17,12 @@ export interface MerklOpportunity {
   chainId: number
   name: string
   apr?: number
+  aprRecord?: {
+    breakdowns?: Array<{
+      identifier?: string
+      value?: number
+    }>
+  }
   tags?: string[]
   tvl: number
   address?: string

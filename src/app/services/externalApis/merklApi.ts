@@ -35,13 +35,47 @@ export class MerklApiService {
         return opportunity
       }
 
+      const removedCampaignIds: string[] = []
       const filteredCampaigns = opportunity.campaigns.filter((campaign) => {
         const campaignId = campaign.campaignId?.toLowerCase()
-        return !campaignId || !EXCLUDED_CAMPAIGN_IDS.has(campaignId)
+        const isExcluded = !!campaignId && EXCLUDED_CAMPAIGN_IDS.has(campaignId)
+        if (isExcluded) {
+          removedCampaignIds.push(campaignId)
+        }
+        return !isExcluded
       })
 
       if (filteredCampaigns.length === opportunity.campaigns.length) {
         return opportunity
+      }
+
+      const vaultAddress = extractAddressFromIdentifier(opportunity.identifier)
+      if (vaultAddress) {
+        const aprBreakdownIds = Array.isArray(opportunity.aprRecord?.breakdowns)
+          ? opportunity.aprRecord.breakdowns
+              .map((breakdown) => breakdown.identifier?.toLowerCase())
+              .filter((id): id is string => !!id)
+          : []
+
+        const breakdownIdSet = new Set(aprBreakdownIds)
+        const blacklistedAprBreakdownCampaignIds = removedCampaignIds.filter(
+          (id) => breakdownIdSet.has(id),
+        )
+
+        logVaultAprDebug({
+          stage: 'blacklist_filter',
+          vaultAddress,
+          opportunityIdentifier: opportunity.identifier,
+          campaignsTotal: opportunity.campaigns.length,
+          aprBreakdownsTotal: aprBreakdownIds.length,
+          blacklistedCampaigns: removedCampaignIds.length,
+          blacklistedCampaignIds: removedCampaignIds,
+          blacklistedAprBreakdownCampaignIds,
+          reason:
+            blacklistedAprBreakdownCampaignIds.length > 0
+              ? 'apr_breakdown_campaign_blacklisted'
+              : 'campaigns_blacklisted',
+        })
       }
 
       return {
