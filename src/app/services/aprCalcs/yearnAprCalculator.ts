@@ -47,8 +47,7 @@ export class YearnAprCalculator implements APRCalculator {
         vault.address,
         yearnOpportunities,
         'yearn',
-        WRAPPED_KAT_ADDRESSES,
-        true // Enable logging for debugging
+        WRAPPED_KAT_ADDRESSES
       )
       return [vault.address, vaultResults]
     })

@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { config } from '../../config'
 import type { YearnVault } from '../../types'
+import { logVaultAprDebug } from '../aprCalcs/debugLogger'
 
 export class YearnApiService {
   private apiUrl: string
@@ -27,6 +28,18 @@ export class YearnApiService {
 
       const response = await axios.get<YearnVault[]>(url)
       const vaults: YearnVault[] = response.data || []
+
+      for (const vault of vaults) {
+        logVaultAprDebug({
+          stage: 'vault_fetch',
+          vaultAddress: vault.address,
+          vaultName: vault.name,
+          vaultSymbol: vault.symbol,
+          chainId,
+          totalVaults: vaults.length,
+          reason: 'fetched_from_ydaemon',
+        })
+      }
 
       return vaults
     } catch (error) {

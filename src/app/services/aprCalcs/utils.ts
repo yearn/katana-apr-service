@@ -5,6 +5,7 @@ import type {
   RewardCalculatorResult,
   YearnRewardCalculatorResult,
 } from './types'
+import { logVaultAprDebug } from './debugLogger'
 
 /**
  * Shortens an Ethereum address to display format (0x1234...5678)
@@ -169,7 +170,6 @@ export const calculateStrategyAPR = (
  * @param opportunities - Array of available opportunities containing campaigns and APR records.
  * @param poolType - The type of pool (e.g., 'morpho') for which APR is being calculated.
  * @param targetRewardTokenAddress - Array of addresses of the reward tokens to filter campaigns by.
- * @param enableLogging - Whether to enable debug logging for this calculation.
  * @returns An array of YearnRewardCalculatorResult objects containing APR breakdowns for each matching campaign,
  *          or null if no opportunity is found for the vault address.
  */
@@ -178,112 +178,142 @@ export const calculateYearnVaultRewardsAPR = (
   vaultAddress: string,
   opportunities: Opportunity[],
   poolType: string,
-  targetRewardTokenAddress: string[],
-  enableLogging: boolean = false
+  targetRewardTokenAddress: string[]
 ): YearnRewardCalculatorResult[] | null => {
-  // Helper function to conditionally log
-  const log = (...args: Parameters<typeof console.log>) => {
-    if (enableLogging) {
-      console.log(...args)
-    }
-  }
+  const zeroPlaceholderResult: YearnRewardCalculatorResult[] = [
+    {
+      vaultName,
+      vaultAddress,
+      poolType,
+      breakdown: {
+        apr: 0,
+        token: {
+          address: '',
+          symbol: '',
+          decimals: 0,
+        },
+        weight: 0,
+      },
+    },
+  ]
 
   if (!vaultAddress) {
-    log('🚫 No vault address provided')
+    logVaultAprDebug({
+      stage: 'result_summary',
+      vaultName,
+      poolType,
+      reason: 'missing_vault_address',
+    })
     return null
   }
-
-  log(`\n👀 Analyzing vault: ${vaultName} (${shortenAddress(vaultAddress)})`)
 
   const opportunity = opportunities.find((opp) =>
     identifierMatchesAddress(opp.identifier, vaultAddress)
   )
 
-  if (opportunity) {
-    log(`\n🎯 Found Opportunity: ${opportunity.name}`)
-    log('═'.repeat(50))
-  }
+  logVaultAprDebug({
+    stage: 'opportunity_lookup',
+    vaultAddress,
+    vaultName,
+    poolType,
+    opportunityIdentifier: opportunity?.identifier,
+    campaignsTotal: opportunity?.campaigns?.length || 0,
+    opportunitiesTotal: opportunities.length,
+    reason: opportunity ? 'opportunity_found' : 'opportunity_missing',
+  })
 
   if (!opportunity?.campaigns?.length) {
-    log(
-      `🔍 No ${poolType} opportunity found for vault: ${vaultName} (${shortenAddress(
-        vaultAddress
-      )})`
-    )
-    log('═'.repeat(50))
+    const reason = opportunity ? 'opportunity_has_no_campaigns' : 'opportunity_missing'
+    logVaultAprDebug({
+      stage: 'result_summary',
+      vaultAddress,
+      vaultName,
+      poolType,
+      opportunitiesTotal: opportunities.length,
+      campaignsTotal: opportunity?.campaigns?.length || 0,
+      acceptedCampaigns: 0,
+      reason,
+    })
     // Return a result with 0 APR and null token details
-    return [
-      {
-        vaultName,
-        vaultAddress,
-        poolType,
-        breakdown: {
-          apr: 0,
-          token: {
-            address: '',
-            symbol: '',
-            decimals: 0,
-          },
-          weight: 0,
-        },
-      },
-    ]
+    return zeroPlaceholderResult
   }
+
+  const aprBreakdowns = Array.isArray(opportunity.aprRecord?.breakdowns)
+    ? opportunity.aprRecord?.breakdowns
+    : []
+
+  logVaultAprDebug({
+    stage: 'campaign_scan',
+    vaultAddress,
+    vaultName,
+    poolType,
+    opportunityIdentifier: opportunity.identifier,
+    campaignsTotal: opportunity.campaigns.length,
+    aprBreakdownsTotal: aprBreakdowns.length,
+    reason: 'scanning_campaigns',
+  })
 
   // First check each campaign to see if its campaignId exists in aprRecord.breakdowns,
   // then confirm the token matches
   const vaultAprValues: Array<{ apr: number; campaign: Campaign }> = []
-  if (
-    opportunity.aprRecord &&
-    Array.isArray(opportunity.aprRecord.breakdowns) &&
-    opportunity.campaigns.length > 0
-  ) {
+  if (opportunity.campaigns.length > 0) {
     for (const campaign of opportunity.campaigns) {
       const campaignId = campaign.campaignId
-      const aprBreakdown = opportunity.aprRecord.breakdowns.find(
-        (b: { identifier?: string; value?: number }) => {
-          const isMatch =
-            b.identifier &&
-            b.identifier.toLowerCase() === String(campaignId).toLowerCase()
-          return isMatch
-        }
+      const aprBreakdown = aprBreakdowns.find(
+        (b: { identifier?: string; value?: number }) =>
+          b.identifier &&
+          b.identifier.toLowerCase() === String(campaignId).toLowerCase()
       )
 
-      // If campaign has APR breakdown and token matches, include it
-      if (aprBreakdown && typeof aprBreakdown.value === 'number') {
-        log(`📊 Campaign ${campaignId}:`)
-        log(
-          `   💰 Token: ${shortenAddress(campaign.rewardToken.address)} (${
-            campaign.rewardToken.symbol
-          })`
-        )
-        log(
-          `   🎯 Target Tokens: [${targetRewardTokenAddress
-            .map((addr) => shortenAddress(addr))
-            .join(', ')}]`
-        )
-        log(`   📈 APR: ${aprBreakdown.value.toFixed(4)}%`)
+      const aprValue =
+        aprBreakdown && typeof aprBreakdown.value === 'number'
+          ? aprBreakdown.value
+          : undefined
+      const aprBreakdownMatched = aprValue !== undefined
 
-        const tokenMatches = targetRewardTokenAddress.some((addr) =>
-          safeIsAddressEqual(campaign.rewardToken.address, addr)
-        )
+      logVaultAprDebug({
+        stage: 'campaign_apr_match',
+        vaultAddress,
+        vaultName,
+        poolType,
+        opportunityIdentifier: opportunity.identifier,
+        campaignId,
+        rewardTokenAddress: campaign.rewardToken.address,
+        rewardTokenSymbol: campaign.rewardToken.symbol,
+        aprBreakdownMatched,
+        aprValue,
+        reason: aprBreakdownMatched
+          ? 'campaign_apr_breakdown_found'
+          : 'campaign_apr_breakdown_missing',
+      })
 
-        log(`   ${tokenMatches ? '✅' : '❌'} Token match: ${tokenMatches}`)
+      if (aprValue === undefined) {
+        continue
+      }
 
-        if (tokenMatches) {
-          log(`   ➕ Adding campaign ${campaignId} to vault APR values`)
-          vaultAprValues.push({ apr: aprBreakdown.value, campaign })
-        }
+      const tokenMatches = targetRewardTokenAddress.some((addr) =>
+        safeIsAddressEqual(campaign.rewardToken.address, addr)
+      )
+
+      logVaultAprDebug({
+        stage: 'token_filter',
+        vaultAddress,
+        vaultName,
+        poolType,
+        opportunityIdentifier: opportunity.identifier,
+        campaignId,
+        rewardTokenAddress: campaign.rewardToken.address,
+        rewardTokenSymbol: campaign.rewardToken.symbol,
+        tokenMatched: tokenMatches,
+        aprValue,
+        reason: tokenMatches ? 'reward_token_allowed' : 'reward_token_filtered',
+      })
+
+      if (tokenMatches) {
+        vaultAprValues.push({ apr: aprValue, campaign })
       }
     }
-
-    log('═'.repeat(50))
   }
-  log(
-    `📋 Summary: Found ${
-      vaultAprValues.length
-    } campaigns with APR data for vault ${shortenAddress(vaultAddress)}\n`
-  )
 
   // Return all APR breakdowns for each matching campaign
   const tokenBreakdowns: YearnRewardCalculatorResult[] = vaultAprValues.map(
@@ -303,7 +333,27 @@ export const calculateYearnVaultRewardsAPR = (
     })
   )
 
-  return combineTokenBreakdowns(tokenBreakdowns, 'vaultAddress')
+  const combined = combineTokenBreakdowns(tokenBreakdowns, 'vaultAddress')
+  logVaultAprDebug({
+    stage: 'result_summary',
+    vaultAddress,
+    vaultName,
+    poolType,
+    opportunityIdentifier: opportunity.identifier,
+    campaignsTotal: opportunity.campaigns.length,
+    aprBreakdownsTotal: aprBreakdowns.length,
+    acceptedCampaigns: combined.length,
+    reason:
+      combined.length > 0
+        ? 'apr_calculated'
+        : 'no_matching_campaigns_after_filters',
+  })
+
+  if (combined.length === 0) {
+    return zeroPlaceholderResult
+  }
+
+  return combined
 }
 
 /**

@@ -47,8 +47,47 @@ export interface Opportunity {
   apr?: number
   aprRecord?: {
     breakdowns?: Array<{
-      identifier: string
-      value: number
+      identifier?: string
+      value?: number
     }>
   }
+}
+
+export type VaultAprDebugStage =
+  | 'vault_fetch'
+  | 'blacklist_filter'
+  | 'opportunity_fetch'
+  | 'opportunity_lookup'
+  | 'campaign_scan'
+  | 'campaign_apr_match'
+  | 'token_filter'
+  | 'result_summary'
+  | 'fallback'
+
+export interface VaultAprDebugEvent {
+  stage: VaultAprDebugStage
+  vaultAddress?: string
+  vaultName?: string
+  vaultSymbol?: string
+  chainId?: number
+  poolType?: string
+  opportunityType?: string
+  opportunityIdentifier?: string
+  opportunitiesTotal?: number
+  campaignId?: string
+  campaignsTotal?: number
+  aprBreakdownsTotal?: number
+  rewardTokenAddress?: string
+  rewardTokenSymbol?: string
+  aprBreakdownMatched?: boolean
+  tokenMatched?: boolean
+  aprValue?: number
+  acceptedCampaigns?: number
+  blacklistedCampaigns?: number
+  blacklistedCampaignIds?: string[]
+  blacklistedAprBreakdownCampaignIds?: string[]
+  totalVaults?: number
+  withResults?: number
+  fallbackCount?: number
+  reason?: string
 }
