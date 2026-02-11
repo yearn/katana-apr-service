@@ -1,16 +1,16 @@
 import type { KongBatchWebhook, Output } from '../types/webhook'
-import { OutputSchema } from '../types/webhook'
+import type { YearnVaultExtra } from '../types/yearn'
 import { DataCacheService } from './dataCache'
 
 const LABEL = 'katana-apr'
 
-const COMPONENTS = [
+const COMPONENTS: (keyof YearnVaultExtra)[] = [
   'katanaAppRewardsAPR',
   'FixedRateKatanaRewards',
   'katanaBonusAPY',
   'katanaNativeYield',
   'steerPointsPerDollar',
-] as const
+]
 
 const dataCacheService = new DataCacheService()
 
@@ -28,24 +28,15 @@ export async function computeKatanaAPR(
       if (!vault) return []
 
       const extra = vault.apr?.extra || {}
-      const outputs: Output[] = []
-
-      for (const component of COMPONENTS) {
-        const value = extra[component] ?? 0
-        outputs.push(
-          OutputSchema.parse({
-            chainId,
-            address,
-            label: LABEL,
-            component,
-            value,
-            blockNumber,
-            blockTime,
-          }),
-        )
-      }
-
-      return outputs
+      return COMPONENTS.map((component) => ({
+        chainId,
+        address,
+        label: LABEL,
+        component,
+        value: extra[component] ?? 0,
+        blockNumber,
+        blockTime,
+      }))
     }),
   )
 
