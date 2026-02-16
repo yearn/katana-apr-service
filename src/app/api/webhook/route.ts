@@ -14,22 +14,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   const bodyText = await req.text()
-  let body: unknown
-  try {
-    body = JSON.parse(bodyText)
-  } catch {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 403 })
-  }
-
-  const subscriptionId = (body as { subscription?: { id?: string } })
-    ?.subscription?.id
-  const secret = subscriptionId ? getWebhookSecret(subscriptionId) : ''
+  const subIdMatch = bodyText.match(/"subscription"\s*:\s*\{[^}]*"id"\s*:\s*"([^"]+)"/)
+  const secret = subIdMatch?.[1] ? getWebhookSecret(subIdMatch[1]) : ''
   if (!secret || !verifyWebhookSignature(signature, bodyText, secret)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 403 })
   }
 
   // ── Process webhook ────────────────────────────────────────────────
   try {
+    const body = JSON.parse(bodyText)
     const hook = KongBatchWebhookSchema.parse(body)
     const outputs = await computeKatanaAPR(hook)
     const validated = OutputSchema.array().parse(outputs)
