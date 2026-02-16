@@ -60,26 +60,34 @@ function makeRequest(body: unknown, signature?: string): Request {
 describe('/api/webhook route', () => {
   beforeEach(() => {
     mocks.mockComputeKatanaAPR.mockReset()
-    vi.stubEnv('WEBHOOK_SECRET_S_TEST', TEST_SECRET)
+    vi.stubEnv('KONG_WEBHOOK_SECRET', TEST_SECRET)
   })
 
-  it('returns 403 when Kong-Signature header is missing', async () => {
+  it('returns 500 when KONG_WEBHOOK_SECRET is not set', async () => {
+    vi.stubEnv('KONG_WEBHOOK_SECRET', '')
+    const req = makeRequest(makeBody(), 'some-sig')
+    const res = await POST(req as any)
+
+    expect(res.status).toBe(500)
+    const body = await res.json()
+    expect(body.error).toBe('webhook secret not configured')
+  })
+
+  it('returns 401 when Kong-Signature header is missing', async () => {
     const req = makeRequest(makeBody())
     const res = await POST(req as any)
 
-    expect(res.status).toBe(403)
-    const body = await res.json()
-    expect(body.error).toBe('unauthorized')
+    expect(res.status).toBe(401)
   })
 
-  it('returns 403 when signature is invalid', async () => {
+  it('returns 401 when signature is invalid', async () => {
     const bodyObj = makeBody()
     const bodyStr = JSON.stringify(bodyObj)
     const badSig = makeSignature(bodyStr, 'wrong-secret')
     const req = makeRequest(bodyObj, badSig)
     const res = await POST(req as any)
 
-    expect(res.status).toBe(403)
+    expect(res.status).toBe(401)
   })
 
   it('returns 400 for invalid payload schema', async () => {
@@ -138,6 +146,6 @@ describe('/api/webhook route', () => {
 
     expect(res.status).toBe(500)
     const body = await res.json()
-    expect(body.error).toBe('internal error')
+    expect(body.error).toBe('boom')
   })
 })

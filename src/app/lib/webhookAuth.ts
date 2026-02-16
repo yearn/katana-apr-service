@@ -1,10 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 
-export function getWebhookSecret(subscriptionId: string): string {
-  const key = `WEBHOOK_SECRET_${subscriptionId}`
-  return process.env[key] || ''
-}
-
 export function verifyWebhookSignature(
   signatureHeader: string,
   body: string,
