@@ -6,7 +6,7 @@ import { KongBatchWebhookSchema, OutputSchema } from '../../types/webhook'
 
 export const dynamic = 'force-dynamic'
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest): Promise<Response> {
   // ── Auth gate ──────────────────────────────────────────────────────
   const secret = process.env.KONG_WEBHOOK_SECRET
   if (!secret) {
@@ -24,7 +24,6 @@ export async function POST(req: NextRequest) {
     return new Response('Invalid signature', { status: 401 })
   }
 
-  // ── Process webhook ────────────────────────────────────────────────
   try {
     const body = JSON.parse(rawBody)
     const hook = KongBatchWebhookSchema.parse(body)
