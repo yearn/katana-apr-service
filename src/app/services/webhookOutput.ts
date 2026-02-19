@@ -28,7 +28,7 @@ export async function computeKatanaAPR(
       if (!vault) return []
 
       const extra = vault.apr?.extra || {}
-      return COMPONENTS.map((component) => ({
+      const componentOutputs = COMPONENTS.map((component) => ({
         chainId,
         address,
         label: LABEL,
@@ -37,6 +37,20 @@ export async function computeKatanaAPR(
         blockNumber,
         blockTime,
       }))
+
+      const netAPR =
+        (extra.katanaAppRewardsAPR ?? 0) +
+        (extra.FixedRateKatanaRewards ?? 0) +
+        (extra.katanaNativeYield ?? 0)
+
+      const netAPY = extra.katanaBonusAPY ?? 0
+
+      componentOutputs.push(
+        { chainId, address, label: LABEL, component: 'netAPR', value: netAPR, blockNumber, blockTime },
+        { chainId, address, label: LABEL, component: 'netAPY', value: netAPY, blockNumber, blockTime },
+      )
+
+      return componentOutputs
     }),
   )
 

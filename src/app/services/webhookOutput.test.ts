@@ -72,7 +72,7 @@ describe('computeKatanaAPR', () => {
 
     const outputs = await computeKatanaAPR(makeHook([VAULT_A]))
 
-    expect(outputs).toHaveLength(5)
+    expect(outputs).toHaveLength(7)
     expect(outputs.every((o) => o.address === VAULT_A)).toBe(true)
     expect(outputs.every((o) => o.label === 'katana-apr')).toBe(true)
     expect(outputs.every((o) => o.chainId === 747474)).toBe(true)
@@ -86,6 +86,8 @@ describe('computeKatanaAPR', () => {
     expect(byComponent.katanaBonusAPY).toBe(0.068)
     expect(byComponent.katanaNativeYield).toBe(0.05)
     expect(byComponent.steerPointsPerDollar).toBe(2)
+    expect(byComponent.netAPR).toBe(0.52)
+    expect(byComponent.netAPY).toBe(0.068)
   })
 
   it('produces outputs for multiple vaults', async () => {
@@ -126,9 +128,9 @@ describe('computeKatanaAPR', () => {
 
     const outputs = await computeKatanaAPR(makeHook([VAULT_A, VAULT_B]))
 
-    expect(outputs).toHaveLength(10) // 5 components * 2 vaults
-    expect(outputs.filter((o) => o.address === VAULT_A)).toHaveLength(5)
-    expect(outputs.filter((o) => o.address === VAULT_B)).toHaveLength(5)
+    expect(outputs).toHaveLength(14) // 7 outputs * 2 vaults
+    expect(outputs.filter((o) => o.address === VAULT_A)).toHaveLength(7)
+    expect(outputs.filter((o) => o.address === VAULT_B)).toHaveLength(7)
   })
 
   it('skips vaults not found in cache', async () => {
@@ -145,7 +147,7 @@ describe('computeKatanaAPR', () => {
 
     const outputs = await computeKatanaAPR(makeHook([VAULT_A, VAULT_B]))
 
-    expect(outputs).toHaveLength(5) // only VAULT_A
+    expect(outputs).toHaveLength(7) // only VAULT_A
     expect(outputs.every((o) => o.address === VAULT_A)).toBe(true)
   })
 
@@ -163,7 +165,7 @@ describe('computeKatanaAPR', () => {
 
     const outputs = await computeKatanaAPR(makeHook([VAULT_A]))
 
-    expect(outputs).toHaveLength(5)
+    expect(outputs).toHaveLength(7)
     expect(outputs.every((o) => o.value === 0)).toBe(true)
   })
 
@@ -185,7 +187,7 @@ describe('computeKatanaAPR', () => {
     consoleSpy.mockRestore()
 
     // VAULT_A returns [] because null is falsy, VAULT_B succeeds
-    expect(outputs).toHaveLength(5)
+    expect(outputs).toHaveLength(7)
     expect(outputs.every((o) => o.address === VAULT_B)).toBe(true)
   })
 
