@@ -21,7 +21,7 @@ const subscription = {
   url: 'https://example.com/webhook',
   abiPath: 'yearn/3/vault',
   type: 'timeseries' as const,
-  labels: ['katana-apr'],
+  labels: ['katana-estimated-apr'],
 }
 
 function makeHook(
@@ -74,7 +74,7 @@ describe('computeKatanaAPR', () => {
 
     expect(outputs).toHaveLength(7)
     expect(outputs.every((o) => o.address === VAULT_A)).toBe(true)
-    expect(outputs.every((o) => o.label === 'katana-apr')).toBe(true)
+    expect(outputs.every((o) => o.label === 'katana-estimated-apr')).toBe(true)
     expect(outputs.every((o) => o.chainId === 747474)).toBe(true)
     expect(outputs.every((o) => o.blockNumber === 100n)).toBe(true)
 

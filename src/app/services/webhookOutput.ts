@@ -2,7 +2,7 @@ import type { KongBatchWebhook, Output } from '../types/webhook'
 import type { YearnVaultExtra } from '../types/yearn'
 import { DataCacheService } from './dataCache'
 
-const LABEL = 'katana-apr'
+const LABEL = 'katana-estimated-apr'
 
 const COMPONENTS: (keyof YearnVaultExtra)[] = [
   'katanaAppRewardsAPR',

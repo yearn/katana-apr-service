@@ -19,7 +19,7 @@ const subscription = {
   url: 'https://example.com/webhook',
   abiPath: 'yearn/3/vault',
   type: 'timeseries',
-  labels: ['katana-apr'],
+  labels: ['katana-estimated-apr'],
 }
 
 function makeBody(overrides = {}) {
@@ -107,7 +107,7 @@ describe('/api/webhook route', () => {
       {
         chainId: 747474,
         address: VAULT_A,
-        label: 'katana-apr',
+        label: 'katana-estimated-apr',
         component: 'katanaAppRewardsAPR',
         value: 0.12,
         blockNumber: 100n,
