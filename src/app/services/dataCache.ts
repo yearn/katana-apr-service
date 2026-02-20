@@ -261,7 +261,7 @@ export class DataCacheService {
         ...(vault.apr?.extra || {}),
         katanaRewardsAPR: yearnVaultRewards || 0, // legacy field
         katanaAppRewardsAPR: yearnVaultRewards || 0, // new field
-        FixedRateKatanaRewards: fixedRateFromHardcoded || 0,
+        fixedRateKatanaRewards: fixedRateFromHardcoded || 0,
         katanaBonusAPY: vaultKatanaBonusAPY,
         katanaNativeYield,
         steerPointsPerDollar:

@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic'
 
 const COMPONENTS: (keyof YearnVaultExtra)[] = [
   'katanaAppRewardsAPR',
-  'FixedRateKatanaRewards',
+  'fixedRateKatanaRewards',
   'katanaBonusAPY',
   'katanaNativeYield',
   'steerPointsPerDollar',
@@ -28,13 +28,13 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   const signature = req.headers.get('kong-signature')
   if (!signature) {
-    return new Response('Missing signature', { status: 401 })
+    return NextResponse.json({ error: 'Missing signature' }, { status: 401 })
   }
 
   const rawBody = await req.text()
 
   if (!verifyWebhookSignature(signature, rawBody, secret)) {
-    return new Response('Invalid signature', { status: 401 })
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
   }
 
   try {
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest): Promise<Response> {
 
       const netAPR =
         (extra.katanaAppRewardsAPR ?? 0) +
-        (extra.FixedRateKatanaRewards ?? 0) +
+        (extra.fixedRateKatanaRewards ?? 0) +
         (extra.katanaNativeYield ?? 0)
 
       outputs.push({ ...base, component: 'netAPR', value: netAPR })
