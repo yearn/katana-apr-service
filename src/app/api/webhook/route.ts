@@ -1,13 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { z } from 'zod'
-import { verifyWebhookSignature } from '../../lib/webhookAuth'
-import { computeKatanaAPR } from '../../services/webhookOutput'
-import { KongBatchWebhookSchema, OutputSchema } from '../../types/webhook'
+import { DataCacheService } from '../../services/dataCache'
+import {
+  verifyWebhookSignature,
+  parseWebhookBody,
+  jsonResponseWithBigInt,
+  type KongOutput,
+} from '../../lib/webhookAuth'
+import type { YearnVaultExtra } from '../../types/yearn'
 
 export const dynamic = 'force-dynamic'
 
+const COMPONENTS: (keyof YearnVaultExtra)[] = [
+  'katanaAppRewardsAPR',
+  'FixedRateKatanaRewards',
+  'katanaBonusAPY',
+  'katanaNativeYield',
+  'steerPointsPerDollar',
+]
+
+const dataCacheService = new DataCacheService()
+
 export async function POST(req: NextRequest): Promise<Response> {
-  // ── Auth gate ──────────────────────────────────────────────────────
   const secret = process.env.KONG_WEBHOOK_SECRET
   if (!secret) {
     return NextResponse.json({ error: 'webhook secret not configured' }, { status: 500 })
@@ -25,25 +38,38 @@ export async function POST(req: NextRequest): Promise<Response> {
   }
 
   try {
-    const body = JSON.parse(rawBody)
-    const hook = KongBatchWebhookSchema.parse(body)
-    const outputs = await computeKatanaAPR(hook)
-    const validated = OutputSchema.array().parse(outputs)
-    const replacer = (_: string, v: unknown) =>
-      typeof v === 'bigint' ? v.toString() : v
-    return new NextResponse(JSON.stringify(validated, replacer), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    })
-  } catch (err) {
-    if (err instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'invalid payload', issues: err.issues },
-        { status: 400 },
-      )
+    const { addresses, chainId, blockNumber, blockTime, label } = parseWebhookBody(rawBody)
+    if (addresses.length === 0) {
+      return jsonResponseWithBigInt([])
     }
-    const message = err instanceof Error ? err.message : String(err)
-    console.error(`Webhook error: ${message}`, { error: err })
+
+    const vaultsMap = await dataCacheService.generateVaultAPRData()
+    const outputs: KongOutput[] = []
+
+    for (const address of addresses) {
+      const vault = vaultsMap[address] || vaultsMap[address.toLowerCase()]
+      if (!vault) continue
+
+      const extra = vault.apr?.extra || {}
+      const base = { chainId, address, label, blockNumber, blockTime }
+
+      for (const component of COMPONENTS) {
+        outputs.push({ ...base, component, value: extra[component] ?? 0 })
+      }
+
+      const netAPR =
+        (extra.katanaAppRewardsAPR ?? 0) +
+        (extra.FixedRateKatanaRewards ?? 0) +
+        (extra.katanaNativeYield ?? 0)
+
+      outputs.push({ ...base, component: 'netAPR', value: netAPR })
+      outputs.push({ ...base, component: 'netAPY', value: extra.katanaBonusAPY ?? 0 })
+    }
+
+    return jsonResponseWithBigInt(outputs)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`Webhook error: ${message}`, { error })
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

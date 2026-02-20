@@ -1,5 +1,23 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 
+export interface KongOutput {
+  chainId: number
+  address: string
+  label: string
+  component: string
+  value: number
+  blockNumber: bigint
+  blockTime: bigint
+}
+
+export interface ParsedWebhookBody {
+  addresses: string[]
+  chainId: number
+  blockNumber: bigint
+  blockTime: bigint
+  label: string
+}
+
 export function verifyWebhookSignature(
   signatureHeader: string,
   body: string,
@@ -30,4 +48,24 @@ export function verifyWebhookSignature(
   } catch {
     return false
   }
+}
+
+export function parseWebhookBody(rawBody: string): ParsedWebhookBody {
+  const body = JSON.parse(rawBody)
+  const { vaults, chainId, blockNumber, blockTime, subscription } = body
+  return {
+    addresses: vaults as string[],
+    chainId: Number(chainId),
+    blockNumber: BigInt(blockNumber),
+    blockTime: BigInt(blockTime),
+    label: subscription?.labels?.[0] ?? '',
+  }
+}
+
+export function jsonResponseWithBigInt(data: unknown): Response {
+  const replacer = (_: string, v: unknown) =>
+    typeof v === 'bigint' ? v.toString() : v
+  return new Response(JSON.stringify(data, replacer), {
+    headers: { 'Content-Type': 'application/json' },
+  })
 }
