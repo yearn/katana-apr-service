@@ -4,6 +4,8 @@ import { DataCacheService } from './dataCache'
 
 const LABEL = 'katana-estimated-apr'
 
+type ComponentKey = keyof YearnVaultExtra | 'netAPR' | 'netAPY'
+
 const COMPONENTS: (keyof YearnVaultExtra)[] = [
   'katanaAppRewardsAPR',
   'FixedRateKatanaRewards',
@@ -20,15 +22,23 @@ export async function computeKatanaAPR(
   const { chainId, vaults: addresses, blockNumber, blockTime } = hook
   if (addresses.length === 0) return []
 
-  const cache = await dataCacheService.generateVaultAPRData()
+  const vaultsMap = await dataCacheService.generateVaultAPRData()
 
   const results = await Promise.allSettled(
     addresses.map(async (address) => {
-      const vault = cache[address] || cache[address.toLowerCase()]
+      const vault = vaultsMap[address] || vaultsMap[address.toLowerCase()]
       if (!vault) return []
 
       const extra = vault.apr?.extra || {}
-      const componentOutputs = COMPONENTS.map((component) => ({
+      const componentOutputs: Array<{
+        chainId: number
+        address: (typeof addresses)[number]
+        label: string
+        component: ComponentKey
+        value: number
+        blockNumber: bigint
+        blockTime: bigint
+      }> = COMPONENTS.map((component) => ({
         chainId,
         address,
         label: LABEL,
