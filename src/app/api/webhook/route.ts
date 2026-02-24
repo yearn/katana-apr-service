@@ -14,7 +14,7 @@ const COMPONENTS: (keyof YearnVaultExtra)[] = [
   'steerPointsPerDollar',
 ]
 
-export interface KongOutput {
+interface KongOutput {
   chainId: number
   address: string
   label: string
@@ -24,7 +24,7 @@ export interface KongOutput {
   blockTime: bigint
 }
 
-export interface ParsedWebhookBody {
+interface ParsedWebhookBody {
   addresses: string[]
   chainId: number
   blockNumber: bigint
@@ -32,7 +32,7 @@ export interface ParsedWebhookBody {
   label: string
 }
 
-export function verifyWebhookSignature(
+function verifyWebhookSignature(
   signatureHeader: string,
   body: string,
   secret: string,
@@ -64,7 +64,7 @@ export function verifyWebhookSignature(
   }
 }
 
-export function parseWebhookBody(rawBody: string): ParsedWebhookBody {
+function parseWebhookBody(rawBody: string): ParsedWebhookBody {
   const body = JSON.parse(rawBody)
   const { vaults, chainId, blockNumber, blockTime, subscription } = body
   return {
@@ -76,7 +76,7 @@ export function parseWebhookBody(rawBody: string): ParsedWebhookBody {
   }
 }
 
-export function jsonResponseWithBigInt(data: unknown): Response {
+function jsonResponseWithBigInt(data: unknown): Response {
   const replacer = (_: string, v: unknown) =>
     typeof v === 'bigint' ? v.toString() : v
   return new Response(JSON.stringify(data, replacer), {
