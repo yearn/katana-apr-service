@@ -79,7 +79,7 @@ export default function QuickAPYs(): React.ReactElement {
           const katanaRewardsAPR = vault.apr?.extra?.katanaRewardsAPR || 0
           const katanaAppRewardsAPR = vault.apr?.extra?.katanaAppRewardsAPR || 0
           const fixedRateKatanaRewards =
-            vault.apr?.extra?.FixedRateKatanaRewards || 0
+            vault.apr?.extra?.fixedRateKatanaRewards || 0
           const katanaBonusAPY = vault.apr?.extra?.katanaBonusAPY || 0
           const katanaNativeYield = vault.apr?.extra?.katanaNativeYield || 0
 

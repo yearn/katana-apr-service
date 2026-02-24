@@ -28,7 +28,7 @@ export interface YearnStrategy {
 export interface YearnVaultExtra {
   katanaRewardsAPR?: number // legacy field
   katanaAppRewardsAPR?: number
-  FixedRateKatanaRewards?: number
+  fixedRateKatanaRewards?: number
   katanaBonusAPY?: number
   katanaNativeYield?: number
   // Points per dollar invested from STEER allocations
