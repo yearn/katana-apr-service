@@ -123,9 +123,13 @@ export async function POST(req: NextRequest): Promise<Response> {
       for (const component of COMPONENTS) {
         outputs.push({ ...base, component, value: extra[component] ?? 0 })
       }
-      
-      outputs.push({ ...base, component: 'netAPR', value: vault.apr?.netAPR ?? 0 })
-      outputs.push({ ...base, component: 'netAPY', value: 0 })
+
+      const netAPR = vault.apr?.netAPR ?? 0
+      const profitUnlockPeriods = 365 / 7
+      const netAPY = (1 + netAPR / profitUnlockPeriods) ** profitUnlockPeriods - 1
+
+      outputs.push({ ...base, component: 'netAPR', value: netAPR })
+      outputs.push({ ...base, component: 'netAPY', value: netAPY })
     }
 
     return jsonResponseWithBigInt(outputs)
