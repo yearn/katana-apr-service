@@ -123,14 +123,9 @@ export async function POST(req: NextRequest): Promise<Response> {
       for (const component of COMPONENTS) {
         outputs.push({ ...base, component, value: extra[component] ?? 0 })
       }
-
-      const netAPR =
-        (extra.katanaAppRewardsAPR ?? 0) +
-        (extra.fixedRateKatanaRewards ?? 0) +
-        (extra.katanaNativeYield ?? 0)
-
-      outputs.push({ ...base, component: 'netAPR', value: netAPR })
-      outputs.push({ ...base, component: 'netAPY', value: extra.katanaBonusAPY ?? 0 })
+      
+      outputs.push({ ...base, component: 'netAPR', value: vault.apr?.netAPR ?? 0 })
+      outputs.push({ ...base, component: 'netAPY', value: 0 })
     }
 
     return jsonResponseWithBigInt(outputs)
