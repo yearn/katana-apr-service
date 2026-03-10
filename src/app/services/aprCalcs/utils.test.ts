@@ -241,4 +241,46 @@ describe('calculateYearnVaultRewardsAPR', () => {
       }),
     )
   })
+
+  it('prefers an exact identifier match over an earlier prefixed match', () => {
+    const results = calculateYearnVaultRewardsAPR(
+      'Vault',
+      VAULT_ADDRESS,
+      [
+        makeOpportunity({
+          identifier: `${VAULT_ADDRESS}JUMPER`,
+          campaigns: [],
+          aprRecord: { breakdowns: [] },
+        }),
+        makeOpportunity(),
+      ],
+      'yearn',
+      [WRAPPED_KAT_ADDRESS],
+    )
+
+    expect(results).toEqual([
+      {
+        vaultName: 'Vault',
+        vaultAddress: VAULT_ADDRESS,
+        poolType: 'yearn',
+        breakdown: {
+          apr: 12.5,
+          token: {
+            address: WRAPPED_KAT_ADDRESS,
+            symbol: 'KAT',
+            decimals: 18,
+          },
+          weight: 0,
+        },
+      },
+    ])
+
+    expect(mocks.logVaultAprDebug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stage: 'opportunity_lookup',
+        opportunityIdentifier: VAULT_ADDRESS,
+        reason: 'opportunity_found',
+      }),
+    )
+  })
 })

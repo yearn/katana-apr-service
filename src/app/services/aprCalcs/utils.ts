@@ -50,6 +50,50 @@ const identifierMatchesAddress = (
   )
 }
 
+const identifierEqualsAddress = (
+  identifier?: string,
+  address?: string
+): boolean => {
+  if (!identifier || !address) {
+    return false
+  }
+  return identifier.toLowerCase() === address.toLowerCase()
+}
+
+const getCampaignCount = (opportunity: Opportunity): number =>
+  opportunity.campaigns?.length || 0
+
+const getAprBreakdownCount = (opportunity: Opportunity): number =>
+  Array.isArray(opportunity.aprRecord?.breakdowns)
+    ? opportunity.aprRecord.breakdowns.length
+    : 0
+
+const findBestOpportunityByAddress = (
+  opportunities: Opportunity[],
+  address: string
+): Opportunity | undefined => {
+  const matchingOpportunities = opportunities.filter((opp) =>
+    identifierMatchesAddress(opp.identifier, address)
+  )
+
+  if (matchingOpportunities.length === 0) {
+    return undefined
+  }
+
+  const exactMatches = matchingOpportunities.filter((opp) =>
+    identifierEqualsAddress(opp.identifier, address)
+  )
+
+  return (
+    exactMatches.find((opp) => getCampaignCount(opp) > 0) ||
+    exactMatches.find((opp) => getAprBreakdownCount(opp) > 0) ||
+    matchingOpportunities.find((opp) => getCampaignCount(opp) > 0) ||
+    matchingOpportunities.find((opp) => getAprBreakdownCount(opp) > 0) ||
+    exactMatches[0] ||
+    matchingOpportunities[0]
+  )
+}
+
 /**
  * Calculates the APR breakdown for a given strategy and pool, based on available opportunities and campaigns.
  *
@@ -76,9 +120,7 @@ export const calculateStrategyAPR = (
     return null
   }
 
-  const opportunity = opportunities.find((opp) =>
-    identifierMatchesAddress(opp.identifier, poolAddress)
-  )
+  const opportunity = findBestOpportunityByAddress(opportunities, poolAddress)
 
   if (!opportunity?.campaigns?.length) {
     console.log(
@@ -207,9 +249,7 @@ export const calculateYearnVaultRewardsAPR = (
     return null
   }
 
-  const opportunity = opportunities.find((opp) =>
-    identifierMatchesAddress(opp.identifier, vaultAddress)
-  )
+  const opportunity = findBestOpportunityByAddress(opportunities, vaultAddress)
 
   logVaultAprDebug({
     stage: 'opportunity_lookup',
