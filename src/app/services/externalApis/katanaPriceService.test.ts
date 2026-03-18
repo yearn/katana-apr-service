@@ -27,35 +27,7 @@ describe('KatanaPriceService', () => {
     resetKatanaPriceServiceCache()
   })
 
-  it('returns CoinGecko price when available for the requested address', async () => {
-    mocks.axiosGet.mockResolvedValueOnce({
-      data: {
-        [config.coingeckoKatanaCoinId]: {
-          usd: 1.25,
-        },
-      },
-    })
-
-    const service = new KatanaPriceService()
-    const price = await service.getTokenPriceUsd(
-      config.katanaChainId,
-      CANONICAL_KAT_ADDRESS,
-    )
-
-    expect(price).toBe(1.25)
-    expect(mocks.axiosGet).toHaveBeenCalledWith(
-      `${config.coingeckoApiUrl}/simple/price`,
-      expect.objectContaining({
-        params: {
-          ids: config.coingeckoKatanaCoinId,
-          vs_currencies: 'usd',
-        },
-      }),
-    )
-  })
-
-  it('falls back to yDaemon prices and parses 6-decimal strings', async () => {
-    mocks.axiosGet.mockResolvedValueOnce({ data: {} })
+  it('returns yDaemon price when available for the requested address', async () => {
     mocks.axiosGet.mockResolvedValueOnce({
       data: {
         [config.katanaChainId]: {
@@ -71,14 +43,41 @@ describe('KatanaPriceService', () => {
     )
 
     expect(price).toBe(1.25)
-    expect(mocks.axiosGet).toHaveBeenNthCalledWith(
-      2,
+    expect(mocks.axiosGet).toHaveBeenCalledWith(
       `${config.yearnApiUrl}/prices/all`,
     )
   })
 
-  it('aliases wrapped KAT addresses to the canonical KAT yDaemon price', async () => {
+  it('falls back to CoinGecko when yDaemon cannot serve a price', async () => {
     mocks.axiosGet.mockResolvedValueOnce({ data: {} })
+    mocks.axiosGet.mockResolvedValueOnce({
+      data: {
+        [config.coingeckoKatanaCoinId]: {
+          usd: 1.25,
+        },
+      },
+    })
+
+    const service = new KatanaPriceService()
+    const price = await service.getTokenPriceUsd(
+      config.katanaChainId,
+      CANONICAL_KAT_ADDRESS,
+    )
+
+    expect(price).toBe(1.25)
+    expect(mocks.axiosGet).toHaveBeenNthCalledWith(
+      2,
+      `${config.coingeckoApiUrl}/simple/price`,
+      expect.objectContaining({
+        params: {
+          ids: config.coingeckoKatanaCoinId,
+          vs_currencies: 'usd',
+        },
+      }),
+    )
+  })
+
+  it('aliases wrapped KAT addresses to the canonical KAT yDaemon price', async () => {
     mocks.axiosGet.mockResolvedValueOnce({
       data: {
         [config.katanaChainId]: {
@@ -94,18 +93,15 @@ describe('KatanaPriceService', () => {
     )
 
     expect(price).toBe(2.5)
-    expect(mocks.axiosGet).toHaveBeenNthCalledWith(
-      2,
+    expect(mocks.axiosGet).toHaveBeenCalledWith(
       `${config.yearnApiUrl}/prices/all`,
     )
   })
 
-  it('returns 0 when both CoinGecko and yDaemon fail to provide a price', async () => {
+  it('returns 0 when both yDaemon and CoinGecko fail to provide a price', async () => {
     mocks.axiosGet.mockResolvedValueOnce({ data: {} })
     mocks.axiosGet.mockResolvedValueOnce({
-      data: {
-        [config.katanaChainId]: {},
-      },
+      data: {},
     })
 
     const service = new KatanaPriceService()
@@ -120,8 +116,8 @@ describe('KatanaPriceService', () => {
   it('reuses a cached price within the TTL window', async () => {
     mocks.axiosGet.mockResolvedValueOnce({
       data: {
-        [config.coingeckoKatanaCoinId]: {
-          usd: 1.25,
+        [config.katanaChainId]: {
+          [CANONICAL_KAT_ADDRESS.toLowerCase()]: '1250000',
         },
       },
     })
@@ -143,7 +139,7 @@ describe('KatanaPriceService', () => {
 
   it('deduplicates concurrent refreshes for the same KAT price', async () => {
     let resolveRequest: ((value: {
-      data: Record<string, { usd?: number }>
+      data: Record<string, Record<string, string>>
     }) => void) | undefined
 
     mocks.axiosGet.mockImplementationOnce(
@@ -167,8 +163,8 @@ describe('KatanaPriceService', () => {
 
     resolveRequest?.({
       data: {
-        [config.coingeckoKatanaCoinId]: {
-          usd: 1.25,
+        [config.katanaChainId]: {
+          [CANONICAL_KAT_ADDRESS.toLowerCase()]: '1250000',
         },
       },
     })
@@ -192,8 +188,8 @@ describe('KatanaPriceService', () => {
 
     mocks.axiosGet.mockResolvedValueOnce({
       data: {
-        [config.coingeckoKatanaCoinId]: {
-          usd: 1.25,
+        [config.katanaChainId]: {
+          [CANONICAL_KAT_ADDRESS.toLowerCase()]: '1250000',
         },
       },
     })
@@ -205,11 +201,9 @@ describe('KatanaPriceService', () => {
     )
 
     vi.setSystemTime(new Date('2026-03-18T09:01:30.000Z'))
-    mocks.axiosGet.mockRejectedValueOnce(new Error('CoinGecko rate limited'))
+    mocks.axiosGet.mockRejectedValueOnce(new Error('yDaemon unavailable'))
     mocks.axiosGet.mockResolvedValueOnce({
-      data: {
-        [config.katanaChainId]: {},
-      },
+      data: {},
     })
 
     const stalePrice = await service.getTokenPriceUsd(
