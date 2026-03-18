@@ -125,14 +125,14 @@ export class KatanaPriceService {
   ): Promise<number> {
     const lookupAddresses = getKatanaPriceLookupAddresses(tokenAddress)
 
-    const coinGeckoPrice = await this.getCoinGeckoPriceUsd()
-    if (coinGeckoPrice > 0) {
-      return coinGeckoPrice
-    }
-
     const yDaemonPrice = await this.getYDaemonPriceUsd(chainId, lookupAddresses)
     if (yDaemonPrice > 0) {
       return yDaemonPrice
+    }
+
+    const coinGeckoPrice = await this.getCoinGeckoPriceUsd()
+    if (coinGeckoPrice > 0) {
+      return coinGeckoPrice
     }
 
     return 0

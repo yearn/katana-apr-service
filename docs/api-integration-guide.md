@@ -113,8 +113,8 @@ curl -sS 'https://api.merkl.xyz/v4/opportunities/?chainId=747474&type=ERC20LOGPR
 
 When this repo needs a local KAT token price, it resolves prices in this order:
 
-1. CoinGecko by coin ID `katana-network-token`
-2. yDaemon `GET /prices/all`
+1. yDaemon `GET /prices/all`
+2. CoinGecko by coin ID `katana-network-token`
 
 Notes:
 
@@ -122,7 +122,8 @@ Notes:
 - The yDaemon price strings use 6 decimals, matching the `yearn.fi` frontend path.
 - Wrapped KAT addresses fall back to canonical KAT before returning `0`.
 - KAT price lookups are cached in-process for 60 seconds, with request deduplication across concurrent callers.
-- If a refresh fails, the service can reuse a stale cached KAT price for up to 5 minutes to reduce CoinGecko rate-limit risk.
+- CoinGecko is only queried when yDaemon cannot return a usable KAT price.
+- If a refresh fails, the service can reuse a stale cached KAT price for up to 5 minutes to reduce pricing disruption and CoinGecko rate-limit risk.
 
 ## End-to-End Pipeline
 
