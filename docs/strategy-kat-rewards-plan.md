@@ -5,7 +5,7 @@
 - Reuse the existing `strategies[]` entries in the vault payload; do not add a new endpoint or parallel breakdown object.
 - Surface raw strategy APR on each active Morpho/Sushi strategy via `strategyRewardsAPR`, and keep `rewardToken` / `underlyingContract` populated there.
 - Keep top-level `apr.extra.katanaAppRewardsAPR` and legacy `katanaRewardsAPR` aligned with the existing live service semantics; this work is only for strategy-level visibility.
-- Keep `/api/webhook` unchanged for now; this feature only changes the vault response shape.
+- Extend `/api/webhook` to emit strategy-addressed KAT APR rows alongside the existing vault-level component rows so Kong can ingest the same strategy data.
 
 ## Key Changes
 
@@ -30,6 +30,7 @@
   - No new public endpoint.
   - The public contract change is: `YearnStrategy.strategyRewardsAPR` becomes populated for active Morpho/Sushi strategies.
   - Top-level `katanaAppRewardsAPR`/`katanaRewardsAPR` should remain consistent with the existing live response.
+  - `POST /api/webhook` should keep the existing five vault-level components and add strategy-addressed `katRewardsAPR` rows using the incoming estimated-APR label.
   - Update the API guide to document the difference between raw per-strategy APR and the unchanged vault-level reward fields.
 
 ## Test Plan
@@ -44,10 +45,12 @@
 - Keep route tests focused on `GET /api/vaults`:
   - Verify the serialized response includes populated `strategyRewardsAPR` on strategies.
   - Verify top-level `katanaAppRewardsAPR` remains consistent with the pre-existing vault-level reward semantics.
-- No webhook test changes beyond confirming existing component outputs remain unchanged.
+- Extend webhook tests to cover:
+  - existing vault-level components remaining unchanged
+  - strategy-addressed `katRewardsAPR` rows being emitted for strategies with `strategyRewardsAPR`
 
 ## Assumptions
 
-- Only `GET /api/vaults` needs strategy-level breakdown; `/api/webhook` remains top-level component-only.
+- `GET /api/vaults` remains the richer debugging surface, while `/api/webhook` only needs numeric strategy APR rows for Kong.
 - `strategyRewardsAPR` is additive strategy metadata only; this change does not alter top-level `apr.extra` values.
 - Morpho and Sushi strategy detection continues to rely on the current `strategy.name` matching rules (`Morpho` and `Steer`).

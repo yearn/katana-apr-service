@@ -400,6 +400,7 @@ Notes:
   - `katanaBonusAPY`
   - `katanaNativeYield`
   - `steerPointsPerDollar`
+- Also emits strategy-addressed `katRewardsAPR` rows for strategies where `strategyRewardsAPR` is present, reusing the incoming estimated-APR label so Kong can hydrate them onto vault composition entries.
 
 ### `GET /api/health`
 
