@@ -33,7 +33,9 @@ describe('/api/vaults route', () => {
 
     expect(response.status).toBe(200)
     expect(body).toEqual(payload)
-    expect(response.headers.get('Cache-Control')).toContain('s-maxage=900')
+    expect(response.headers.get('Cache-Control')).toBe(
+      'public, max-age=0, s-maxage=60, stale-while-revalidate=60',
+    )
     expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*')
   })
 

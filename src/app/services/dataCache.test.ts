@@ -32,7 +32,9 @@ vi.mock('./aprCalcs/debugLogger', () => ({
 
 import { DataCacheService } from './dataCache'
 
-const makeVault = (): YearnVault => ({
+const STRATEGY_ADDRESS = '0x00000000000000000000000000000000000000cc'
+
+const makeVault = (overrides: Partial<YearnVault> = {}): YearnVault => ({
   address: '0x00000000000000000000000000000000000000aa',
   symbol: 'TST',
   name: 'Test Vault',
@@ -41,6 +43,7 @@ const makeVault = (): YearnVault => ({
   apr: {
     netAPR: 0.02,
   },
+  ...overrides,
 })
 
 describe('DataCacheService.generateVaultAPRData', () => {
@@ -78,7 +81,22 @@ describe('DataCacheService.generateVaultAPRData', () => {
   })
 
   it('aggregates vault APR when rewards data exists', async () => {
-    const vault = makeVault()
+    const vault = makeVault({
+      strategies: [
+        {
+          address: STRATEGY_ADDRESS,
+          name: 'Strategy',
+          status: 'active',
+          details: {
+            totalDebt: '1',
+            totalGain: '0',
+            totalLoss: '0',
+            lastReport: 0,
+            debtRatio: 5000,
+          },
+        },
+      ],
+    })
     mocks.mockGetVaults.mockResolvedValue([vault])
     mocks.mockCalculateVaultAPRs.mockResolvedValue({
       [vault.address]: [
@@ -96,6 +114,20 @@ describe('DataCacheService.generateVaultAPRData', () => {
             weight: 0,
           },
         },
+        {
+          strategyAddress: STRATEGY_ADDRESS,
+          poolAddress: '0x00000000000000000000000000000000000000dd',
+          poolType: 'morpho',
+          breakdown: {
+            apr: 4,
+            token: {
+              address: '0x00000000000000000000000000000000000000bb',
+              symbol: 'KAT',
+              decimals: 18,
+            },
+            weight: 0,
+          },
+        },
       ],
     })
 
@@ -105,6 +137,16 @@ describe('DataCacheService.generateVaultAPRData', () => {
 
     expect(aggregatedVault.address).toBe(vault.address)
     expect(aggregatedVault.apr?.extra?.katanaAppRewardsAPR).toBe(0.1)
+    expect(aggregatedVault.apr?.extra?.fixedRateKatanaRewards).toBe(0)
+    expect(aggregatedVault.apr?.extra?.katanaBonusAPY).toBe(0)
+    expect(aggregatedVault.strategies[0].rewardToken).toEqual({
+      address: '0x00000000000000000000000000000000000000bb',
+      symbol: 'KAT',
+      decimals: 18,
+    })
+    expect(aggregatedVault.strategies[0].rewardToken).not.toHaveProperty(
+      'assumedFDV',
+    )
     expect(mocks.logVaultAprDebug).toHaveBeenCalledWith(
       expect.objectContaining({
         stage: 'result_summary',
