@@ -1,7 +1,11 @@
 import axios from 'axios'
 import { formatUnits } from 'viem'
 import { config } from '../../config'
-import { getKatanaPriceLookupAddresses } from '../katanaRewardTokens'
+import {
+  CANONICAL_KAT_ADDRESS,
+  getKatanaPriceLookupAddresses,
+  isKatanaRewardTokenAddress,
+} from '../katanaRewardTokens'
 
 type CoinGeckoTokenPriceResponse = Record<
   string,
@@ -13,9 +17,31 @@ type CoinGeckoTokenPriceResponse = Record<
 type YDaemonPricesChain = Record<string, Record<string, string>>
 
 const YDAEMON_PRICE_DECIMALS = 6
+const PRICE_CACHE_TTL_MS = 60_000
+const PRICE_CACHE_STALE_TTL_MS = 5 * 60_000
+
+type CachedKatanaPrice = {
+  priceUsd: number
+  freshUntil: number
+  staleUntil: number
+}
+
+const katanaPriceCache = new Map<string, CachedKatanaPrice>()
+const inFlightPriceRequests = new Map<string, Promise<number>>()
 
 const isPositiveFiniteNumber = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value) && value > 0
+
+const getCacheKeyAddress = (tokenAddress: string): string => {
+  if (isKatanaRewardTokenAddress(tokenAddress)) {
+    return CANONICAL_KAT_ADDRESS.toLowerCase()
+  }
+
+  return tokenAddress.toLowerCase()
+}
+
+const getCacheKey = (chainId: number, tokenAddress: string): string =>
+  `${chainId}:${getCacheKeyAddress(tokenAddress)}`
 
 const parseYDaemonPriceUsd = (rawPrice: unknown): number => {
   if (typeof rawPrice !== 'string' || rawPrice.length === 0) {
@@ -49,6 +75,51 @@ export class KatanaPriceService {
   }
 
   async getTokenPriceUsd(
+    chainId: number,
+    tokenAddress: string,
+  ): Promise<number> {
+    const cacheKey = getCacheKey(chainId, tokenAddress)
+    const now = Date.now()
+    const cachedPrice = katanaPriceCache.get(cacheKey)
+
+    if (cachedPrice && cachedPrice.freshUntil > now) {
+      return cachedPrice.priceUsd
+    }
+
+    const inFlightRequest = inFlightPriceRequests.get(cacheKey)
+    if (inFlightRequest) {
+      return await inFlightRequest
+    }
+
+    const refreshPromise = this.fetchTokenPriceUsd(chainId, tokenAddress)
+      .then((priceUsd) => {
+        const refreshedAt = Date.now()
+
+        if (priceUsd > 0) {
+          katanaPriceCache.set(cacheKey, {
+            priceUsd,
+            freshUntil: refreshedAt + PRICE_CACHE_TTL_MS,
+            staleUntil: refreshedAt + PRICE_CACHE_STALE_TTL_MS,
+          })
+          return priceUsd
+        }
+
+        const staleCachedPrice = katanaPriceCache.get(cacheKey)
+        if (staleCachedPrice && staleCachedPrice.staleUntil > refreshedAt) {
+          return staleCachedPrice.priceUsd
+        }
+
+        return 0
+      })
+      .finally(() => {
+        inFlightPriceRequests.delete(cacheKey)
+      })
+
+    inFlightPriceRequests.set(cacheKey, refreshPromise)
+    return await refreshPromise
+  }
+
+  private async fetchTokenPriceUsd(
     chainId: number,
     tokenAddress: string,
   ): Promise<number> {
@@ -126,6 +197,11 @@ export class KatanaPriceService {
 
     return 0
   }
+}
+
+export const resetKatanaPriceServiceCache = (): void => {
+  katanaPriceCache.clear()
+  inFlightPriceRequests.clear()
 }
 
 export { parseYDaemonPriceUsd }

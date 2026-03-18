@@ -3,6 +3,7 @@ import type { YearnVault } from '../types'
 
 const mocks = vi.hoisted(() => ({
   mockGetVaults: vi.fn(),
+  mockGetTokenPriceUsd: vi.fn(),
   mockCalculateVaultAPRs: vi.fn(),
   mockCalculateSteerPoints: vi.fn(),
   logVaultAprDebug: vi.fn(),
@@ -11,6 +12,12 @@ const mocks = vi.hoisted(() => ({
 vi.mock('./externalApis/yearnApi', () => ({
   YearnApiService: vi.fn().mockImplementation(() => ({
     getVaults: mocks.mockGetVaults,
+  })),
+}))
+
+vi.mock('./externalApis/katanaPriceService', () => ({
+  KatanaPriceService: vi.fn().mockImplementation(() => ({
+    getTokenPriceUsd: mocks.mockGetTokenPriceUsd,
   })),
 }))
 
@@ -49,9 +56,11 @@ const makeVault = (overrides: Partial<YearnVault> = {}): YearnVault => ({
 describe('DataCacheService.generateVaultAPRData', () => {
   beforeEach(() => {
     mocks.mockGetVaults.mockReset()
+    mocks.mockGetTokenPriceUsd.mockReset()
     mocks.mockCalculateVaultAPRs.mockReset()
     mocks.mockCalculateSteerPoints.mockReset()
     mocks.logVaultAprDebug.mockReset()
+    mocks.mockGetTokenPriceUsd.mockResolvedValue(1)
     mocks.mockCalculateSteerPoints.mockReturnValue(0)
   })
 
@@ -154,5 +163,36 @@ describe('DataCacheService.generateVaultAPRData', () => {
         reason: 'vault_results_aggregated',
       }),
     )
+  })
+
+  it('scales fixed rate rewards by the live-to-assumed KAT price ratio', async () => {
+    const vault = makeVault({
+      symbol: 'yvvbUSDC',
+    })
+    mocks.mockGetVaults.mockResolvedValue([vault])
+    mocks.mockGetTokenPriceUsd.mockResolvedValue(0.5)
+    mocks.mockCalculateVaultAPRs.mockResolvedValue({
+      [vault.address]: [
+        {
+          vaultName: vault.name,
+          vaultAddress: vault.address,
+          poolType: 'yearn',
+          breakdown: {
+            apr: 10,
+            token: {
+              address: '0x00000000000000000000000000000000000000bb',
+              symbol: 'KAT',
+              decimals: 18,
+            },
+            weight: 0,
+          },
+        },
+      ],
+    })
+
+    const service = new DataCacheService()
+    const data = await service.generateVaultAPRData()
+
+    expect(data[vault.address].apr?.extra?.fixedRateKatanaRewards).toBe(1.75)
   })
 })
