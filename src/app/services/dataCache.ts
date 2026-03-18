@@ -3,9 +3,11 @@ import { isAddressEqual } from 'viem'
 import { config } from '../config/index'
 import type { YearnVault } from '../types/index'
 import { YearnApiService } from './externalApis/yearnApi'
+import { KatanaPriceService } from './externalApis/katanaPriceService'
 import { YearnAprCalculator } from './aprCalcs/yearnAprCalculator'
 import { SteerPointsCalculator } from './pointsCalcs/steerPointsCalculator'
 import { logVaultAprDebug } from './aprCalcs/debugLogger'
+import { CANONICAL_KAT_ADDRESS } from './katanaRewardTokens'
 import {
   type RewardCalculatorResult,
   TokenBreakdown,
@@ -25,13 +27,36 @@ export interface APRDataCache {
 
 export type { TokenBreakdown }
 
+const ASSUMED_KAT_PRICE_USD = 0.1
+
+const FIXED_RATE_APR_AT_ASSUMED_KAT_PRICE: Record<
+  | 'yvvbETH'
+  | 'yvvbUSDC'
+  | 'yvvbUSDT'
+  | 'AUSD'
+  | 'yvvbWBTC'
+  | 'yvvbUSDS'
+  | 'yvwstETH',
+  number
+> = {
+  yvvbETH: 0.14,
+  yvvbUSDC: 0.35,
+  yvvbUSDT: 0.35,
+  AUSD: 0.35,
+  yvvbWBTC: 0.07,
+  yvvbUSDS: 0.0,
+  yvwstETH: 0.0,
+}
+
 export class DataCacheService {
   private yearnApi: YearnApiService
+  private katanaPriceService: KatanaPriceService
   private yearnAprCalculator: YearnAprCalculator
   private steerPointsCalculator: SteerPointsCalculator
 
   constructor() {
     this.yearnApi = new YearnApiService()
+    this.katanaPriceService = new KatanaPriceService()
     this.yearnAprCalculator = new YearnAprCalculator()
     this.steerPointsCalculator = new SteerPointsCalculator()
   }
@@ -52,9 +77,14 @@ export class DataCacheService {
     // Get APR data from each calculator
     const [
       yearnAPRs,
+      katanaTokenPriceUsd,
       // fixedRateAPRs
     ] = await Promise.all([
       this.yearnAprCalculator.calculateVaultAPRs(vaults),
+      this.katanaPriceService.getTokenPriceUsd(
+        config.katanaChainId,
+        CANONICAL_KAT_ADDRESS,
+      ),
       // this.yearnAprCalculator.calculateFixedRateVaultAPRs(vaults),
     ])
 
@@ -98,7 +128,10 @@ export class DataCacheService {
             reason: 'vault_results_aggregated',
           })
 
-          return [vault.address, this.aggregateVaultResults(vault, allResults)]
+          return [
+            vault.address,
+            this.aggregateVaultResults(vault, allResults, katanaTokenPriceUsd),
+          ]
         } catch (error) {
           console.error(`Error processing vault ${vault.address}:`, error)
           logVaultAprDebug({
@@ -140,6 +173,7 @@ export class DataCacheService {
   private aggregateVaultResults(
     vault: YearnVault,
     results: RewardCalculatorResult[],
+    katanaTokenPriceUsd: number,
   ): YearnVault {
     // Build new strategies array with appended data from results
     const strategiesWithRewards = (vault.strategies || []).map((strat) => {
@@ -194,8 +228,14 @@ export class DataCacheService {
       0,
     )
 
-    // Legacy fields are kept for consumer compatibility, but both programs are retired post-TGE.
-    const fixedRateFromHardcoded = 0
+    const fixedRateBaseApr =
+      FIXED_RATE_APR_AT_ASSUMED_KAT_PRICE[
+        vault.symbol as keyof typeof FIXED_RATE_APR_AT_ASSUMED_KAT_PRICE
+      ] || 0
+
+    const fixedRateFromHardcoded =
+      fixedRateBaseApr * (katanaTokenPriceUsd / ASSUMED_KAT_PRICE_USD)
+
     const vaultKatanaBonusAPY = 0
 
     const katanaNativeYield = vault.apr?.netAPR || 0

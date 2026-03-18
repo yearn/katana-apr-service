@@ -121,6 +121,8 @@ Notes:
 - yDaemon returns `chainId -> tokenAddress -> priceString`.
 - The yDaemon price strings use 6 decimals, matching the `yearn.fi` frontend path.
 - Wrapped KAT addresses fall back to canonical KAT before returning `0`.
+- KAT price lookups are cached in-process for 60 seconds, with request deduplication across concurrent callers.
+- If a refresh fails, the service can reuse a stale cached KAT price for up to 5 minutes to reduce CoinGecko rate-limit risk.
 
 ## End-to-End Pipeline
 
@@ -175,7 +177,7 @@ APR units:
 
 - `apr.extra.katanaRewardsAPR` (legacy alias)
 - `apr.extra.katanaAppRewardsAPR`
-- `apr.extra.fixedRateKatanaRewards` (`0` post-TGE, kept for compatibility)
+- `apr.extra.fixedRateKatanaRewards` (legacy fixed-rate schedule scaled by `live KAT price / assumed $0.10 KAT price`)
 - `apr.extra.katanaBonusAPY` (`0` post-TGE, kept for compatibility)
 - `apr.extra.katanaNativeYield` (`vault.apr.netAPR`)
 - `apr.extra.steerPointsPerDollar` (from strategy debt-weighted rates)
@@ -311,6 +313,13 @@ Snippet:
 
 From `DataCacheService.generateVaultAPRData()`:
 
+Notes:
+
+- `katanaAppRewardsAPR` comes from Merkl APR breakdowns.
+- `fixedRateKatanaRewards` uses the legacy fixed-rate table as the APR basis at an assumed `KAT = $0.10 USD`, then scales by `livePrice / 0.10`.
+- `katanaBonusAPY` remains `0`.
+- The example `fixedRateKatanaRewards` values below assume `KAT = $0.10 USD`, which matches the historical fixed-rate program basis.
+
 ```json
 [
   {
@@ -318,7 +327,7 @@ From `DataCacheService.generateVaultAPRData()`:
     "symbol": "yvvbUSDC",
     "name": "USDC yVault",
     "katanaAppRewardsAPR": 0.005709245156139802,
-    "fixedRateKatanaRewards": 0,
+    "fixedRateKatanaRewards": 0.35,
     "katanaBonusAPY": 0,
     "katanaNativeYield": 0.03392437419763983,
     "steerPointsPerDollar": 0.1711
@@ -328,7 +337,7 @@ From `DataCacheService.generateVaultAPRData()`:
     "symbol": "AUSD",
     "name": "AUSD yVault",
     "katanaAppRewardsAPR": 0,
-    "fixedRateKatanaRewards": 0,
+    "fixedRateKatanaRewards": 0.35,
     "katanaBonusAPY": 0,
     "katanaNativeYield": 0.11184248250750017,
     "steerPointsPerDollar": 0.1294
@@ -338,7 +347,7 @@ From `DataCacheService.generateVaultAPRData()`:
     "symbol": "yvvbWBTC",
     "name": "WBTC yVault",
     "katanaAppRewardsAPR": 0,
-    "fixedRateKatanaRewards": 0,
+    "fixedRateKatanaRewards": 0.07,
     "katanaBonusAPY": 0,
     "katanaNativeYield": 0.0006326777539145123,
     "steerPointsPerDollar": 0

@@ -14,11 +14,17 @@ vi.mock('axios', () => ({
   },
 }))
 
-import { KatanaPriceService, parseYDaemonPriceUsd } from './katanaPriceService'
+import {
+  KatanaPriceService,
+  parseYDaemonPriceUsd,
+  resetKatanaPriceServiceCache,
+} from './katanaPriceService'
 
 describe('KatanaPriceService', () => {
   beforeEach(() => {
+    vi.useRealTimers()
     mocks.axiosGet.mockReset()
+    resetKatanaPriceServiceCache()
   })
 
   it('returns CoinGecko price when available for the requested address', async () => {
@@ -109,6 +115,113 @@ describe('KatanaPriceService', () => {
     )
 
     expect(price).toBe(0)
+  })
+
+  it('reuses a cached price within the TTL window', async () => {
+    mocks.axiosGet.mockResolvedValueOnce({
+      data: {
+        [config.coingeckoKatanaCoinId]: {
+          usd: 1.25,
+        },
+      },
+    })
+
+    const service = new KatanaPriceService()
+    const firstPrice = await service.getTokenPriceUsd(
+      config.katanaChainId,
+      CANONICAL_KAT_ADDRESS,
+    )
+    const secondPrice = await service.getTokenPriceUsd(
+      config.katanaChainId,
+      WRAPPED_KAT_ADDRESS,
+    )
+
+    expect(firstPrice).toBe(1.25)
+    expect(secondPrice).toBe(1.25)
+    expect(mocks.axiosGet).toHaveBeenCalledTimes(1)
+  })
+
+  it('deduplicates concurrent refreshes for the same KAT price', async () => {
+    let resolveRequest: ((value: {
+      data: Record<string, { usd?: number }>
+    }) => void) | undefined
+
+    mocks.axiosGet.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRequest = resolve
+        }),
+    )
+
+    const service = new KatanaPriceService()
+    const firstRequest = service.getTokenPriceUsd(
+      config.katanaChainId,
+      CANONICAL_KAT_ADDRESS,
+    )
+    const secondRequest = service.getTokenPriceUsd(
+      config.katanaChainId,
+      WRAPPED_KAT_ADDRESS,
+    )
+
+    expect(mocks.axiosGet).toHaveBeenCalledTimes(1)
+
+    resolveRequest?.({
+      data: {
+        [config.coingeckoKatanaCoinId]: {
+          usd: 1.25,
+        },
+      },
+    })
+
+    const [firstPrice, secondPrice] = await Promise.all([
+      firstRequest,
+      secondRequest,
+    ])
+
+    expect(firstPrice).toBe(1.25)
+    expect(secondPrice).toBe(1.25)
+    expect(mocks.axiosGet).toHaveBeenCalledTimes(1)
+  })
+
+  it('serves a stale cached price when refresh fails within the stale window', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-03-18T09:00:00.000Z'))
+    const consoleErrorSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined)
+
+    mocks.axiosGet.mockResolvedValueOnce({
+      data: {
+        [config.coingeckoKatanaCoinId]: {
+          usd: 1.25,
+        },
+      },
+    })
+
+    const service = new KatanaPriceService()
+    const freshPrice = await service.getTokenPriceUsd(
+      config.katanaChainId,
+      CANONICAL_KAT_ADDRESS,
+    )
+
+    vi.setSystemTime(new Date('2026-03-18T09:01:30.000Z'))
+    mocks.axiosGet.mockRejectedValueOnce(new Error('CoinGecko rate limited'))
+    mocks.axiosGet.mockResolvedValueOnce({
+      data: {
+        [config.katanaChainId]: {},
+      },
+    })
+
+    const stalePrice = await service.getTokenPriceUsd(
+      config.katanaChainId,
+      CANONICAL_KAT_ADDRESS,
+    )
+
+    expect(freshPrice).toBe(1.25)
+    expect(stalePrice).toBe(1.25)
+    expect(mocks.axiosGet).toHaveBeenCalledTimes(3)
+
+    consoleErrorSpy.mockRestore()
   })
 })
 
