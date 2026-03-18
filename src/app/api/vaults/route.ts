@@ -17,7 +17,7 @@ function getCacheControlHeaderValue(): string {
   // - max-age=0: browsers should not cache
   // - s-maxage: CDN cache TTL
   // - stale-while-revalidate: serve stale while refreshing in the background
-  return 'public, max-age=0, s-maxage=900, stale-while-revalidate=600'
+  return 'public, max-age=0, s-maxage=60, stale-while-revalidate=60'
 }
 
 export async function GET(): Promise<NextResponse> {

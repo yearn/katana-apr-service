@@ -29,10 +29,13 @@ At request time, the service:
 - External APIs:
   - `src/app/services/externalApis/yearnApi.ts`
   - `src/app/services/externalApis/merklApi.ts`
+  - `src/app/services/externalApis/katanaPriceService.ts`
   - `src/app/services/externalApis/merklBlacklist.ts`
 - APR matching logic:
   - `src/app/services/aprCalcs/yearnAprCalculator.ts`
   - `src/app/services/aprCalcs/utils.ts`
+- Shared reward-token allowlist:
+  - `src/app/services/katanaRewardTokens.ts`
 - Points logic:
   - `src/app/services/pointsCalcs/steerPointsCalculator.ts`
 
@@ -106,6 +109,19 @@ curl -sS 'https://api.merkl.xyz/v4/opportunities/?chainId=747474&type=ERC20LOGPR
 curl -sS 'https://api.merkl.xyz/v4/opportunities/?chainId=747474&type=ERC20LOGPROCESSOR&status=LIVE&campaigns=true&campaignId=0xc5a22d022154d5c64ff14b2f4071f134eb83cf159f9f846ad0ba0908a755e86d'
 ```
 
+### KAT price resolution utility
+
+When this repo needs a local KAT token price, it resolves prices in this order:
+
+1. CoinGecko by contract address on asset platform `katana`
+2. yDaemon `GET /prices/all`
+
+Notes:
+
+- yDaemon returns `chainId -> tokenAddress -> priceString`.
+- The yDaemon price strings use 6 decimals, matching the `yearn.fi` frontend path.
+- Wrapped KAT addresses fall back to canonical KAT before returning `0`.
+
 ## End-to-End Pipeline
 
 ### 1) Vault fetch
@@ -143,7 +159,7 @@ For each campaign in the chosen opportunity:
 
 - Campaign must have a matching APR breakdown:
   - `campaign.campaignId` equals `aprRecord.breakdowns[].identifier`
-- Campaign reward token must be allowlisted in `WRAPPED_KAT_ADDRESSES`:
+- Campaign reward token must be allowlisted in `KATANA_REWARD_TOKEN_ADDRESSES`:
   - `0x6E9C1F88a960fE63387eb4b71BC525a9313d8461`
   - `0x3ba1fbC4c3aEA775d335b31fb53778f46FD3a330`
   - `0x0161A31702d6CF715aaa912d64c6A190FD0093aa`
@@ -159,8 +175,8 @@ APR units:
 
 - `apr.extra.katanaRewardsAPR` (legacy alias)
 - `apr.extra.katanaAppRewardsAPR`
-- `apr.extra.fixedRateKatanaRewards` (currently hardcoded table)
-- `apr.extra.katanaBonusAPY` (hardcoded table)
+- `apr.extra.fixedRateKatanaRewards` (`0` post-TGE, kept for compatibility)
+- `apr.extra.katanaBonusAPY` (`0` post-TGE, kept for compatibility)
 - `apr.extra.katanaNativeYield` (`vault.apr.netAPR`)
 - `apr.extra.steerPointsPerDollar` (from strategy debt-weighted rates)
 
@@ -291,7 +307,7 @@ Snippet:
 }
 ```
 
-### 5) Service output snapshot (computed extras)
+### 5) Service output shape (post-TGE computed extras)
 
 From `DataCacheService.generateVaultAPRData()`:
 
@@ -302,8 +318,8 @@ From `DataCacheService.generateVaultAPRData()`:
     "symbol": "yvvbUSDC",
     "name": "USDC yVault",
     "katanaAppRewardsAPR": 0.005709245156139802,
-    "fixedRateKatanaRewards": 0.35,
-    "katanaBonusAPY": 0.068,
+    "fixedRateKatanaRewards": 0,
+    "katanaBonusAPY": 0,
     "katanaNativeYield": 0.03392437419763983,
     "steerPointsPerDollar": 0.1711
   },
@@ -312,8 +328,8 @@ From `DataCacheService.generateVaultAPRData()`:
     "symbol": "AUSD",
     "name": "AUSD yVault",
     "katanaAppRewardsAPR": 0,
-    "fixedRateKatanaRewards": 0.35,
-    "katanaBonusAPY": 0.068,
+    "fixedRateKatanaRewards": 0,
+    "katanaBonusAPY": 0,
     "katanaNativeYield": 0.11184248250750017,
     "steerPointsPerDollar": 0.1294
   },
@@ -322,8 +338,8 @@ From `DataCacheService.generateVaultAPRData()`:
     "symbol": "yvvbWBTC",
     "name": "WBTC yVault",
     "katanaAppRewardsAPR": 0,
-    "fixedRateKatanaRewards": 0.07,
-    "katanaBonusAPY": 0.016,
+    "fixedRateKatanaRewards": 0,
+    "katanaBonusAPY": 0,
     "katanaNativeYield": 0.0006326777539145123,
     "steerPointsPerDollar": 0
   }
@@ -338,7 +354,7 @@ From `DataCacheService.generateVaultAPRData()`:
 - Response is keyed by vault address.
 - Headers:
   - `Access-Control-Allow-Origin: *`
-  - `Cache-Control: public, max-age=0, s-maxage=900, stale-while-revalidate=600`
+  - `Cache-Control: public, max-age=0, s-maxage=60, stale-while-revalidate=60`
 
 ### `POST /api/webhook`
 
@@ -367,7 +383,7 @@ When a vault looks wrong:
 2. Query Merkl by `identifier=<vaultAddress>`.
 3. Check `aprRecord.breakdowns[].identifier`.
 4. Verify matching `campaigns[].campaignId` still exists after blacklist.
-5. Verify reward token is in `WRAPPED_KAT_ADDRESSES`.
+5. Verify reward token is in `KATANA_REWARD_TOKEN_ADDRESSES`.
 6. If multiple opportunities share an address prefix, ensure exact identifier match is chosen.
 7. Run the live debug script:
    - `bun run test:vault-debug:live -- --vault <address>`

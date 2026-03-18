@@ -1,6 +1,8 @@
+import type { YearnVault } from '../../types'
+
 export interface APRCalculator {
   calculateVaultAPRs(
-    vaults: any[]
+    vaults: YearnVault[]
   ): Promise<Record<string, RewardCalculatorResult[]>>
 }
 

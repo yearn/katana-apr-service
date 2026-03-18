@@ -25,44 +25,6 @@ export interface APRDataCache {
 
 export type { TokenBreakdown }
 
-/**
- * This is a bonus for users who do not withdraw from the vaults over a certain period of time.
- * It is provided by the Katana team.
- */
-const katanaBonusAPY: Record<
-  'yvvbETH' | 'yvvbUSDC' | 'yvvbUSDT' | 'AUSD' | 'yvvbWBTC' | 'yvvbUSDS',
-  number
-> = {
-  yvvbETH: 0.016,
-  yvvbUSDC: 0.068,
-  yvvbUSDT: 0.068,
-  AUSD: 0.068,
-  yvvbWBTC: 0.016,
-  yvvbUSDS: 0.0,
-}
-
-const HARDCODED_FIXED_RATE_APR: Record<
-  | 'yvvbETH'
-  | 'yvvbUSDC'
-  | 'yvvbUSDT'
-  | 'AUSD'
-  | 'yvvbWBTC'
-  | 'yvvbUSDS'
-  | 'yvwstETH',
-  number
-> = {
-  yvvbETH: 0.14,
-  yvvbUSDC: 0.35,
-  yvvbUSDT: 0.35,
-  AUSD: 0.35,
-  yvvbWBTC: 0.07,
-  yvvbUSDS: 0.0,
-  yvwstETH: 0.0,
-}
-
-// Default FDV value
-const FDV = 1_000_000_000
-
 export class DataCacheService {
   private yearnApi: YearnApiService
   private yearnAprCalculator: YearnAprCalculator
@@ -200,7 +162,7 @@ export class DataCacheService {
 
       const strategyData = result?.breakdown
         ? {
-            rewardToken: { ...result.breakdown.token, assumedFDV: FDV },
+            rewardToken: { ...result.breakdown.token },
             underlyingContract: result.poolAddress,
           }
         : {
@@ -232,27 +194,10 @@ export class DataCacheService {
       0,
     )
 
-    // use this when fixed rate pools are live
-    // const fixedRateResults = vaultLevelResults.filter(
-    //   (r) => r.poolType === 'fixed rate'
-    // )
-    // const fixedRateVaultAPR = fixedRateResults.reduce(
-    //   (sum, result) =>
-    //     sum + (result.breakdown?.apr ? result.breakdown.apr / 100 : 0),
-    //   0
-    // )
+    // Legacy fields are kept for consumer compatibility, but both programs are retired post-TGE.
+    const fixedRateFromHardcoded = 0
+    const vaultKatanaBonusAPY = 0
 
-    // override with hardcoded values until new campaigns are live
-    const fixedRateFromHardcoded =
-      HARDCODED_FIXED_RATE_APR[
-        vault.symbol as keyof typeof HARDCODED_FIXED_RATE_APR
-      ] || 0
-
-    // Get the katana bonus APY for this vault based on its symbol
-    const vaultKatanaBonusAPY =
-      katanaBonusAPY[vault.symbol as keyof typeof katanaBonusAPY] || 0
-
-    // katanaNativeYield is the greater of the second field or netAPR
     const katanaNativeYield = vault.apr?.netAPR || 0
 
     const apr = {
