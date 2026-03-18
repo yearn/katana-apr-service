@@ -24,7 +24,7 @@ describe('KatanaPriceService', () => {
   it('returns CoinGecko price when available for the requested address', async () => {
     mocks.axiosGet.mockResolvedValueOnce({
       data: {
-        [CANONICAL_KAT_ADDRESS.toLowerCase()]: {
+        [config.coingeckoKatanaCoinId]: {
           usd: 1.25,
         },
       },
@@ -38,10 +38,10 @@ describe('KatanaPriceService', () => {
 
     expect(price).toBe(1.25)
     expect(mocks.axiosGet).toHaveBeenCalledWith(
-      `${config.coingeckoApiUrl}/simple/token_price/${config.coingeckoKatanaPlatformId}`,
+      `${config.coingeckoApiUrl}/simple/price`,
       expect.objectContaining({
         params: {
-          contract_addresses: CANONICAL_KAT_ADDRESS.toLowerCase(),
+          ids: config.coingeckoKatanaCoinId,
           vs_currencies: 'usd',
         },
       }),
@@ -71,11 +71,12 @@ describe('KatanaPriceService', () => {
     )
   })
 
-  it('aliases wrapped KAT addresses to the canonical KAT price', async () => {
+  it('aliases wrapped KAT addresses to the canonical KAT yDaemon price', async () => {
+    mocks.axiosGet.mockResolvedValueOnce({ data: {} })
     mocks.axiosGet.mockResolvedValueOnce({
       data: {
-        [CANONICAL_KAT_ADDRESS.toLowerCase()]: {
-          usd: 2.5,
+        [config.katanaChainId]: {
+          [CANONICAL_KAT_ADDRESS.toLowerCase()]: '2500000',
         },
       },
     })
@@ -87,17 +88,9 @@ describe('KatanaPriceService', () => {
     )
 
     expect(price).toBe(2.5)
-    expect(mocks.axiosGet).toHaveBeenCalledWith(
-      `${config.coingeckoApiUrl}/simple/token_price/${config.coingeckoKatanaPlatformId}`,
-      expect.objectContaining({
-        params: {
-          contract_addresses: [
-            WRAPPED_KAT_ADDRESS.toLowerCase(),
-            CANONICAL_KAT_ADDRESS.toLowerCase(),
-          ].join(','),
-          vs_currencies: 'usd',
-        },
-      }),
+    expect(mocks.axiosGet).toHaveBeenNthCalledWith(
+      2,
+      `${config.yearnApiUrl}/prices/all`,
     )
   })
 

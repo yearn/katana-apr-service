@@ -25,8 +25,8 @@ export const config = {
   coingeckoApiUrl:
     process.env.COINGECKO_BASE_URI || 'https://api.coingecko.com/api/v3',
   coingeckoApiKey: process.env.COINGECKO_API_KEY,
-  coingeckoKatanaPlatformId:
-    process.env.COINGECKO_KATANA_PLATFORM_ID || 'katana',
+  coingeckoKatanaCoinId:
+    process.env.COINGECKO_KATANA_COIN_ID || 'katana-network-token',
   aprDebugEnabled: parseBoolean(process.env.APR_DEBUG_ENABLED),
   aprDebugVaultAddress: process.env.APR_DEBUG_VAULT_ADDRESS?.toLowerCase(),
   aprDebugSampleLimit: parsePositiveInteger(process.env.APR_DEBUG_SAMPLE_LIMIT),

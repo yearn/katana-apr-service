@@ -113,7 +113,7 @@ curl -sS 'https://api.merkl.xyz/v4/opportunities/?chainId=747474&type=ERC20LOGPR
 
 When this repo needs a local KAT token price, it resolves prices in this order:
 
-1. CoinGecko by contract address on asset platform `katana`
+1. CoinGecko by coin ID `katana-network-token`
 2. yDaemon `GET /prices/all`
 
 Notes:

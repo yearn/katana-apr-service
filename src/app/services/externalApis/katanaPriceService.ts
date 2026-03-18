@@ -35,13 +35,13 @@ const parseYDaemonPriceUsd = (rawPrice: unknown): number => {
 
 export class KatanaPriceService {
   private readonly coingeckoApiUrl: string
-  private readonly coingeckoKatanaPlatformId: string
+  private readonly coingeckoKatanaCoinId: string
   private readonly yearnApiUrl: string
   private readonly coinGeckoHeaders?: Record<string, string>
 
   constructor() {
     this.coingeckoApiUrl = config.coingeckoApiUrl
-    this.coingeckoKatanaPlatformId = config.coingeckoKatanaPlatformId
+    this.coingeckoKatanaCoinId = config.coingeckoKatanaCoinId
     this.yearnApiUrl = config.yearnApiUrl
     this.coinGeckoHeaders = config.coingeckoApiKey
       ? { 'x-cg-demo-api-key': config.coingeckoApiKey }
@@ -54,7 +54,7 @@ export class KatanaPriceService {
   ): Promise<number> {
     const lookupAddresses = getKatanaPriceLookupAddresses(tokenAddress)
 
-    const coinGeckoPrice = await this.getCoinGeckoPriceUsd(lookupAddresses)
+    const coinGeckoPrice = await this.getCoinGeckoPriceUsd()
     if (coinGeckoPrice > 0) {
       return coinGeckoPrice
     }
@@ -67,24 +67,22 @@ export class KatanaPriceService {
     return 0
   }
 
-  private async getCoinGeckoPriceUsd(addresses: string[]): Promise<number> {
+  private async getCoinGeckoPriceUsd(): Promise<number> {
     try {
       const response = await axios.get<CoinGeckoTokenPriceResponse>(
-        `${this.coingeckoApiUrl}/simple/token_price/${this.coingeckoKatanaPlatformId}`,
+        `${this.coingeckoApiUrl}/simple/price`,
         {
           params: {
-            contract_addresses: addresses.join(','),
+            ids: this.coingeckoKatanaCoinId,
             vs_currencies: 'usd',
           },
           headers: this.coinGeckoHeaders,
         },
       )
 
-      for (const address of addresses) {
-        const price = response.data?.[address]?.usd
-        if (isPositiveFiniteNumber(price)) {
-          return price
-        }
+      const price = response.data?.[this.coingeckoKatanaCoinId]?.usd
+      if (isPositiveFiniteNumber(price)) {
+        return price
       }
     } catch (error) {
       console.error('Error fetching CoinGecko token price:', error)
