@@ -60,17 +60,18 @@ export class SushiAprCalculator implements APRCalculator {
     const resultEntries = _.chain(vaultStrategyPairs)
       .map(({ vault, strategies }) => {
         const vaultResults = _.chain(strategies)
-          .map((strategy) => {
+          .flatMap((strategy) => {
             const poolAddress = strategyToPool[strategy.toLowerCase()]
-            return calculateStrategyAPR(
+            const result = calculateStrategyAPR(
               strategy,
               poolAddress,
               sushiOpportunities,
               'sushi',
               SUSHI_WRAPPED_KAT_ADDRESS
             )
+
+            return result || []
           })
-          .compact()
           .value()
 
         return vaultResults.length > 0 ? [vault.address, vaultResults] : null

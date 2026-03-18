@@ -46,13 +46,11 @@ describe('MerklApiService', () => {
       campaigns: [],
     }
 
-    mocks.axiosGet
-      .mockRejectedValueOnce(primaryError)
-      .mockResolvedValueOnce({
-        data: {
-          opportunities: [fallbackOpportunity],
-        },
-      })
+    mocks.axiosGet.mockRejectedValueOnce(primaryError).mockResolvedValueOnce({
+      data: {
+        opportunities: [fallbackOpportunity],
+      },
+    })
 
     const service = new MerklApiService()
     const opportunities = await service.getYearnOpportunities()
@@ -114,6 +112,25 @@ describe('MerklApiService', () => {
 
     consoleWarn.mockRestore()
     consoleError.mockRestore()
+  })
+
+  it('queries sushiswap opportunities using the live Merkl name filter', async () => {
+    mocks.axiosGet.mockResolvedValue({
+      data: [],
+    })
+
+    const service = new MerklApiService()
+    await service.getSushiOpportunities()
+
+    expect(mocks.axiosGet).toHaveBeenCalledWith(
+      expect.stringContaining('/v4/opportunities'),
+      expect.objectContaining({
+        params: expect.objectContaining({
+          name: 'sushiswap',
+          campaigns: true,
+        }),
+      }),
+    )
   })
 
   it('logs when a blacklist removes the active APR-breakdown campaign', async () => {

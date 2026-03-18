@@ -179,18 +179,33 @@ For each campaign in the chosen opportunity:
 APR units:
 
 - Merkl `breakdown.value` is a percent value (for example `0.56` means `0.56%`).
-- Service converts to decimal by dividing by `100` before storing in `apr.extra.katanaAppRewardsAPR`.
+- Service converts to decimal by dividing by `100` before storing strategy-level `strategyRewardsAPR` values and vault-level Katana reward fields.
 
 ### 6) Final vault output shaping
 
 `DataCacheService.aggregateVaultResults()` sets:
 
+- `strategies[].strategyRewardsAPR` for active Morpho/Steer strategies as raw strategy APR in decimal form
+- `strategies[].rewardToken` and `strategies[].underlyingContract` when the strategy pool/token could be resolved
 - `apr.extra.katanaRewardsAPR` (legacy alias)
-- `apr.extra.katanaAppRewardsAPR`
+- `apr.extra.katanaAppRewardsAPR` from Yearn vault-level rewards
 - `apr.extra.fixedRateKatanaRewards` (legacy fixed-rate schedule scaled by `live KAT price / assumed $0.10 KAT price`)
 - `apr.extra.katanaBonusAPY` (`0` post-TGE, kept for compatibility)
 - `apr.extra.katanaNativeYield` (`vault.apr.netAPR`)
 - `apr.extra.steerPointsPerDollar` (from strategy debt-weighted rates)
+
+Weighting notes:
+
+- Strategy entries expose raw APR so downstream consumers can see which rewards path is active per strategy.
+- The top-level vault reward fields are unchanged by this strategy decoration and should continue matching the existing live service semantics.
+
+Why calculators are split:
+
+- `YearnAprCalculator` tracks rewards that make it all the way to the vault depositor level.
+- `MorphoAprCalculator` and `SushiAprCalculator` track strategy-level rewards because those positions can earn both KAT and non-KAT incentives at the same time.
+- The non-KAT rewards on Morpho/Sushi paths are intended to be auto-compounded inside the strategy, so they should stop at the strategy layer rather than being treated as a vault-level manual reward.
+- KAT rewards on those same strategies are not auto-compounded there; they have to be manually forwarded through to vault depositors, which is why the strategy-level KAT view is useful even when the top-line vault reward fields stay on the existing Yearn-vault calculation path.
+- Because of that split, `apr.extra.katanaAppRewardsAPR` will not necessarily equal the sum of `strategies[].strategyRewardsAPR` across the vault.
 
 ## Why a Vault Can Show `katanaAppRewardsAPR = 0`
 
@@ -325,7 +340,7 @@ From `DataCacheService.generateVaultAPRData()`:
 
 Notes:
 
-- `katanaAppRewardsAPR` comes from Merkl APR breakdowns.
+- `katanaAppRewardsAPR` continues to come from Yearn vault-level Merkl APR breakdowns.
 - `fixedRateKatanaRewards` uses the legacy fixed-rate table as the APR basis at an assumed `KAT = $0.10 USD`, then scales by `livePrice / 0.10`.
 - `katanaBonusAPY` remains `0`.
 - The example `fixedRateKatanaRewards` values below assume `KAT = $0.10 USD`, which matches the historical fixed-rate program basis.

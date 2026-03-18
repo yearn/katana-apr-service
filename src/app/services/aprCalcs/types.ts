@@ -30,6 +30,10 @@ export interface YearnRewardCalculatorResult {
   breakdown: TokenBreakdown
 }
 
+export type VaultRewardCalculatorResult =
+  | RewardCalculatorResult
+  | YearnRewardCalculatorResult
+
 export interface Campaign {
   campaignId?: string
   amount?: string

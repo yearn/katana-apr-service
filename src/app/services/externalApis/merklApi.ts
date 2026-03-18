@@ -161,7 +161,7 @@ export class MerklApiService {
   async getSushiOpportunities(): Promise<MerklOpportunity[]> {
     try {
       const params = {
-        name: 'sushi',
+        name: 'sushiswap',
         chainId: config.katanaChainId,
         campaigns: true,
       }

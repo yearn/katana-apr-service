@@ -1,9 +1,10 @@
 import _ from 'lodash'
-import { isAddressEqual } from 'viem'
 import { config } from '../config/index'
 import type { YearnVault } from '../types/index'
 import { YearnApiService } from './externalApis/yearnApi'
 import { KatanaPriceService } from './externalApis/katanaPriceService'
+import { MorphoAprCalculator } from './aprCalcs/morphoAprCalculator'
+import { SushiAprCalculator } from './aprCalcs/sushiAprCalculator'
 import { YearnAprCalculator } from './aprCalcs/yearnAprCalculator'
 import { SteerPointsCalculator } from './pointsCalcs/steerPointsCalculator'
 import { logVaultAprDebug } from './aprCalcs/debugLogger'
@@ -11,6 +12,7 @@ import { CANONICAL_KAT_ADDRESS } from './katanaRewardTokens'
 import {
   type RewardCalculatorResult,
   TokenBreakdown,
+  type VaultRewardCalculatorResult,
   YearnRewardCalculatorResult,
 } from './aprCalcs/types'
 
@@ -26,6 +28,12 @@ export interface APRDataCache {
 }
 
 export type { TokenBreakdown }
+
+interface StrategyRewardSummary {
+  rawApr: number
+  rewardToken?: TokenBreakdown['token']
+  underlyingContract?: string
+}
 
 const ASSUMED_KAT_PRICE_USD = 0.1
 
@@ -52,12 +60,16 @@ export class DataCacheService {
   private yearnApi: YearnApiService
   private katanaPriceService: KatanaPriceService
   private yearnAprCalculator: YearnAprCalculator
+  private morphoAprCalculator: MorphoAprCalculator
+  private sushiAprCalculator: SushiAprCalculator
   private steerPointsCalculator: SteerPointsCalculator
 
   constructor() {
     this.yearnApi = new YearnApiService()
     this.katanaPriceService = new KatanaPriceService()
     this.yearnAprCalculator = new YearnAprCalculator()
+    this.morphoAprCalculator = new MorphoAprCalculator()
+    this.sushiAprCalculator = new SushiAprCalculator()
     this.steerPointsCalculator = new SteerPointsCalculator()
   }
 
@@ -77,10 +89,14 @@ export class DataCacheService {
     // Get APR data from each calculator
     const [
       yearnAPRs,
+      morphoAPRs,
+      sushiAPRs,
       katanaTokenPriceUsd,
       // fixedRateAPRs
     ] = await Promise.all([
       this.yearnAprCalculator.calculateVaultAPRs(vaults),
+      this.morphoAprCalculator.calculateVaultAPRs(vaults),
+      this.sushiAprCalculator.calculateVaultAPRs(vaults),
       this.katanaPriceService.getTokenPriceUsd(
         config.katanaChainId,
         CANONICAL_KAT_ADDRESS,
@@ -94,6 +110,8 @@ export class DataCacheService {
         try {
           const allResults = _.chain([
             yearnAPRs[vault.address],
+            morphoAPRs[vault.address],
+            sushiAPRs[vault.address],
             // fixedRateAPRs[vault.address],
           ])
             .flattenDeep()
@@ -172,50 +190,40 @@ export class DataCacheService {
 
   private aggregateVaultResults(
     vault: YearnVault,
-    results: RewardCalculatorResult[],
+    results: VaultRewardCalculatorResult[],
     katanaTokenPriceUsd: number,
   ): YearnVault {
-    // Build new strategies array with appended data from results
-    const strategiesWithRewards = (vault.strategies || []).map((strat) => {
-      if (!strat.address || strat.status?.toLowerCase() !== 'active') {
-        return { strategy: strat, debtRatio: 0 }
-      }
+    const strategyResults = results.filter(
+      (result): result is RewardCalculatorResult => 'strategyAddress' in result,
+    )
+    const strategyRewardsByAddress = this.buildStrategyRewardsByAddress(
+      strategyResults,
+    )
 
-      const result = results.find((r) => {
-        const addressToCheck =
-          'strategyAddress' in r && r.strategyAddress
-            ? r.strategyAddress
-            : 'vaultAddress' in r
-              ? (r as unknown as YearnRewardCalculatorResult).vaultAddress
-              : undefined
-        return isAddressEqual(
-          addressToCheck as `0x${string}`,
-          strat.address as `0x${string}`,
-        )
-      })
-
-      const strategyData = result?.breakdown
-        ? {
-            rewardToken: { ...result.breakdown.token },
-            underlyingContract: result.poolAddress,
-          }
-        : {
-            rewardToken: undefined,
-            underlyingContract: undefined,
-          }
+    const strategiesWithRewards = (vault.strategies || []).map((strategy) => {
+      const strategyAddress = this.normalizeAddress(strategy.address)
+      const strategyRewards = strategyAddress
+        ? strategyRewardsByAddress[strategyAddress]
+        : undefined
 
       return {
-        strategy: {
-          ...strat,
-          ...strategyData,
-        },
-        debtRatio: strat.details?.debtRatio ?? strat.details?.debtRatio ?? 0,
+        ...strategy,
+        ...(strategyRewards
+          ? {
+              strategyRewardsAPR: strategyRewards.rawApr,
+              rewardToken: strategyRewards.rewardToken
+                ? { ...strategyRewards.rewardToken }
+                : undefined,
+              underlyingContract: strategyRewards.underlyingContract,
+            }
+          : {}),
       }
     })
 
     // Find vault-level APR results (where vaultAddress matches vault.address)
     const vaultLevelResults = results.filter(
-      (r) => 'vaultAddress' in r && r.vaultAddress === vault.address,
+      (result): result is YearnRewardCalculatorResult =>
+        'vaultAddress' in result && result.vaultAddress === vault.address,
     )
 
     // Separate results by pool type
@@ -245,7 +253,7 @@ export class DataCacheService {
       extra: {
         ...(vault.apr?.extra || {}),
         katanaRewardsAPR: yearnVaultRewards || 0, // legacy field
-        katanaAppRewardsAPR: yearnVaultRewards || 0, // new field
+        katanaAppRewardsAPR: yearnVaultRewards || 0,
         fixedRateKatanaRewards: fixedRateFromHardcoded || 0,
         katanaBonusAPY: vaultKatanaBonusAPY,
         katanaNativeYield,
@@ -262,9 +270,59 @@ export class DataCacheService {
       token: vault.token,
       tvl: vault.tvl,
       apr,
-      strategies: strategiesWithRewards.map(({ strategy }) => strategy),
+      strategies: strategiesWithRewards,
     }
 
     return newVault
+  }
+
+  private buildStrategyRewardsByAddress(
+    results: RewardCalculatorResult[],
+  ): Record<string, StrategyRewardSummary> {
+    return results.reduce<Record<string, StrategyRewardSummary>>(
+      (accumulator, result) => {
+        const strategyAddress = this.normalizeAddress(result.strategyAddress)
+        if (!strategyAddress) {
+          return accumulator
+        }
+
+        const existing = accumulator[strategyAddress] || { rawApr: 0 }
+        const nextRewardToken = this.hasResolvedRewardToken(result)
+          ? { ...result.breakdown.token }
+          : existing.rewardToken
+
+        accumulator[strategyAddress] = {
+          rawApr: existing.rawApr + this.toAprDecimal(result.breakdown?.apr),
+          rewardToken: nextRewardToken,
+          underlyingContract:
+            existing.underlyingContract || result.poolAddress || undefined,
+        }
+
+        return accumulator
+      },
+      {},
+    )
+  }
+
+  private hasResolvedRewardToken(result: RewardCalculatorResult): boolean {
+    return Boolean(result.breakdown?.token?.address)
+  }
+
+  private normalizeAddress(address?: string): string | undefined {
+    if (!address) {
+      return undefined
+    }
+
+    return address.toLowerCase()
+  }
+
+  private toAprDecimal(aprPercent?: number): number {
+    const apr = this.toFiniteNumber(aprPercent)
+    return apr > 0 ? apr / 100 : 0
+  }
+
+  private toFiniteNumber(value?: number | string): number {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : 0
   }
 }
