@@ -73,6 +73,11 @@ Base URL (default):
 
 - `https://api.merkl.xyz`
 
+Fallback hosts used by app code when the primary request fails:
+
+- `https://api.merkl.fr`
+- `https://api-merkl.angle.money`
+
 Docs:
 
 - HTML docs: `https://api.merkl.xyz/docs#tag/opportunities`
@@ -134,6 +139,8 @@ Notes:
 ### 2) Merkl fetch
 
 `MerklApiService.getErc20LogProcessorOpportunities()` fetches Merkl opportunities and campaign payloads.
+
+It tries the configured `MERKL_BASE_URI` first, then falls back to `https://api.merkl.fr` and `https://api-merkl.angle.money` before returning an empty result.
 
 ### 3) Blacklist filter
 

@@ -5,6 +5,15 @@ import { isAddress } from 'viem'
 import { logVaultAprDebug } from '../aprCalcs/debugLogger'
 import { isExcludedCampaignId } from './merklBlacklist'
 
+const MERKL_FALLBACK_URLS = [
+  'https://api.merkl.fr',
+  'https://api-merkl.angle.money',
+] as const
+
+type MerklOpportunitiesResponse =
+  | MerklOpportunity[]
+  | { opportunities: MerklOpportunity[] }
+
 const extractAddressFromIdentifier = (
   identifier?: string
 ): string | undefined => {
@@ -17,10 +26,12 @@ const extractAddressFromIdentifier = (
 }
 
 export class MerklApiService {
-  private apiUrl: string
+  private apiUrls: string[]
 
   constructor() {
-    this.apiUrl = config.merklApiUrl
+    this.apiUrls = Array.from(
+      new Set([config.merklApiUrl, ...MERKL_FALLBACK_URLS])
+    )
   }
 
   private filterCampaigns(
@@ -83,24 +94,74 @@ export class MerklApiService {
     })
   }
 
+  private normalizeOpportunities(
+    responseData: MerklOpportunitiesResponse,
+  ): MerklOpportunity[] {
+    return Array.isArray(responseData)
+      ? responseData
+      : responseData.opportunities || []
+  }
+
+  private describeRequestError(error: unknown): string {
+    if (!(error instanceof Error)) {
+      return String(error)
+    }
+
+    const axiosLikeError = error as Error & {
+      code?: string
+      response?: { status?: number }
+    }
+
+    const details = [
+      axiosLikeError.code,
+      axiosLikeError.response?.status
+        ? `status ${axiosLikeError.response.status}`
+        : undefined,
+    ].filter((value): value is string => !!value)
+
+    return details.length > 0
+      ? `${error.message} (${details.join(', ')})`
+      : error.message
+  }
+
+  private async fetchOpportunities(
+    params: Record<string, boolean | number | string>,
+  ): Promise<MerklOpportunity[]> {
+    let lastError: unknown
+
+    for (let index = 0; index < this.apiUrls.length; index += 1) {
+      const apiUrl = this.apiUrls[index]
+
+      try {
+        const response = await axios.get<MerklOpportunitiesResponse>(
+          `${apiUrl}/v4/opportunities`,
+          { params },
+        )
+
+        return this.normalizeOpportunities(response.data)
+      } catch (error) {
+        lastError = error
+
+        if (index < this.apiUrls.length - 1) {
+          console.warn(
+            `Merkl request failed for ${apiUrl}; trying fallback host: ${this.describeRequestError(error)}`
+          )
+        }
+      }
+    }
+
+    throw lastError
+  }
+
   async getSushiOpportunities(): Promise<MerklOpportunity[]> {
     try {
-      const url: string = `${this.apiUrl}/v4/opportunities`
       const params = {
         name: 'sushi',
         chainId: config.katanaChainId,
         campaigns: true,
       }
 
-      const response = await axios.get<
-        MerklOpportunity[] | { opportunities: MerklOpportunity[] }
-      >(url, { params })
-
-      // The response is an array directly
-      const opportunities: MerklOpportunity[] = Array.isArray(response.data)
-        ? response.data
-        : response.data.opportunities || []
-
+      const opportunities = await this.fetchOpportunities(params)
       return this.filterCampaigns(opportunities)
     } catch (error) {
       console.error('Error fetching Sushi opportunities:', error)
@@ -110,22 +171,13 @@ export class MerklApiService {
 
   async getMorphoOpportunities(): Promise<MerklOpportunity[]> {
     try {
-      const url: string = `${this.apiUrl}/v4/opportunities`
       const params = {
         name: 'morpho',
         chainId: config.katanaChainId,
         campaigns: true,
       }
 
-      const response = await axios.get<
-        MerklOpportunity[] | { opportunities: MerklOpportunity[] }
-      >(url, { params })
-
-      // The response is an array directly
-      const opportunities: MerklOpportunity[] = Array.isArray(response.data)
-        ? response.data
-        : response.data.opportunities || []
-
+      const opportunities = await this.fetchOpportunities(params)
       return this.filterCampaigns(opportunities)
     } catch (error) {
       console.error('Error fetching Morpho opportunities:', error)
@@ -145,22 +197,13 @@ export class MerklApiService {
    */
   async getYearnOpportunities(): Promise<MerklOpportunity[]> {
     try {
-      const url: string = `${this.apiUrl}/v4/opportunities`
       const params = {
         name: 'yearn',
         chainId: config.katanaChainId,
         campaigns: true,
       }
 
-      const response = await axios.get<
-        MerklOpportunity[] | { opportunities: MerklOpportunity[] }
-      >(url, { params })
-
-      // The response is an array directly
-      const opportunities: MerklOpportunity[] = Array.isArray(response.data)
-        ? response.data
-        : response.data.opportunities || []
-
+      const opportunities = await this.fetchOpportunities(params)
       return this.filterCampaigns(opportunities)
     } catch (error) {
       console.error('Error fetching Yearn opportunities:', error)
@@ -184,7 +227,6 @@ export class MerklApiService {
    */
   async getErc20LogProcessorOpportunities(): Promise<MerklOpportunity[]> {
     try {
-      const url: string = `${this.apiUrl}/v4/opportunities`
       const params = {
         status: 'LIVE',
         chainId: config.katanaChainId,
@@ -192,15 +234,7 @@ export class MerklApiService {
         campaigns: true,
       }
 
-      const response = await axios.get<
-        MerklOpportunity[] | { opportunities: MerklOpportunity[] }
-      >(url, { params })
-
-      // The response is an array directly
-      const opportunities: MerklOpportunity[] = Array.isArray(response.data)
-        ? response.data
-        : response.data.opportunities || []
-
+      const opportunities = await this.fetchOpportunities(params)
       const filteredOpportunities = this.filterCampaigns(opportunities)
       for (const opportunity of filteredOpportunities) {
         const vaultAddress = extractAddressFromIdentifier(
@@ -242,7 +276,6 @@ export class MerklApiService {
    */
   async getErc20FixAprOpportunities(): Promise<MerklOpportunity[]> {
     try {
-      const url: string = `${this.apiUrl}/v4/opportunities`
       const params = {
         status: 'LIVE',
         chainId: config.katanaChainId,
@@ -250,15 +283,7 @@ export class MerklApiService {
         campaigns: true,
       }
 
-      const response = await axios.get<
-        MerklOpportunity[] | { opportunities: MerklOpportunity[] }
-      >(url, { params })
-
-      // The response is an array directly
-      const opportunities: MerklOpportunity[] = Array.isArray(response.data)
-        ? response.data
-        : response.data.opportunities || []
-
+      const opportunities = await this.fetchOpportunities(params)
       const filteredOpportunities = this.filterCampaigns(opportunities)
       for (const opportunity of filteredOpportunities) {
         const vaultAddress = extractAddressFromIdentifier(
@@ -282,7 +307,7 @@ export class MerklApiService {
 
       return filteredOpportunities
     } catch (error) {
-      console.error('Error fetching ERC20 Log Processor opportunities:', error)
+      console.error('Error fetching ERC20 Fixed APR opportunities:', error)
       return []
     }
   }
