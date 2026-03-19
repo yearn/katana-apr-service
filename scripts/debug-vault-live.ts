@@ -7,7 +7,20 @@ dotenv.config()
 
 const CHAIN_ID = Number.parseInt(process.env.KATANA_CHAIN_ID ?? '747474', 10)
 const YEARN_API_URL = process.env.YDAEMON_BASE_URI || 'https://ydaemon.yearn.fi'
+const DEFAULT_MERKL_API_URL = 'https://api.merkl.xyz'
 const MERKL_API_URL = process.env.MERKL_BASE_URI || 'https://api.merkl.xyz'
+const MERKL_FALLBACK_URLS = [
+  'https://api.merkl.fr',
+  'https://api-merkl.angle.money',
+] as const
+const normalizeApiUrl = (apiUrl: string): string => apiUrl.replace(/\/+$/, '')
+const MERKL_API_URLS = Array.from(
+  new Set(
+    normalizeApiUrl(MERKL_API_URL) === DEFAULT_MERKL_API_URL
+      ? [normalizeApiUrl(MERKL_API_URL), ...MERKL_FALLBACK_URLS]
+      : [normalizeApiUrl(MERKL_API_URL)]
+  )
+)
 
 const WRAPPED_KAT_ADDRESSES = [
   '0x6E9C1F88a960fE63387eb4b71BC525a9313d8461',
@@ -288,23 +301,63 @@ const applyCampaignBlacklist = (
     }
   })
 
+const normalizeMerklOpportunities = (
+  responseData: MerklOpportunity[] | { opportunities: MerklOpportunity[] }
+): MerklOpportunity[] =>
+  Array.isArray(responseData) ? responseData : responseData.opportunities || []
+
+const describeRequestError = (error: unknown): string => {
+  if (!(error instanceof Error)) {
+    return String(error)
+  }
+
+  const axiosLikeError = error as Error & {
+    code?: string
+    response?: { status?: number }
+  }
+
+  const details = [
+    axiosLikeError.code,
+    axiosLikeError.response?.status
+      ? `status ${axiosLikeError.response.status}`
+      : undefined,
+  ].filter((value): value is string => !!value)
+
+  return details.length > 0
+    ? `${error.message} (${details.join(', ')})`
+    : error.message
+}
+
 const fetchMerklOpportunities = async (): Promise<MerklOpportunity[]> => {
-  const response = await axios.get<
-    MerklOpportunity[] | { opportunities: MerklOpportunity[] }
-  >(`${MERKL_API_URL}/v4/opportunities`, {
-    params: {
-      status: 'LIVE',
-      chainId: CHAIN_ID,
-      type: 'ERC20LOGPROCESSOR',
-      campaigns: true,
-    },
-  })
+  const params = {
+    status: 'LIVE',
+    chainId: CHAIN_ID,
+    type: 'ERC20LOGPROCESSOR',
+    campaigns: true,
+  }
+  let lastError: unknown
 
-  const opportunities = Array.isArray(response.data)
-    ? response.data
-    : response.data.opportunities || []
+  for (let index = 0; index < MERKL_API_URLS.length; index += 1) {
+    const apiUrl = MERKL_API_URLS[index]
 
-  return applyCampaignBlacklist(opportunities)
+    try {
+      const response = await axios.get<
+        MerklOpportunity[] | { opportunities: MerklOpportunity[] }
+      >(`${apiUrl}/v4/opportunities`, { params })
+
+      return applyCampaignBlacklist(normalizeMerklOpportunities(response.data))
+    } catch (error) {
+      lastError = error
+
+      if (index < MERKL_API_URLS.length - 1) {
+        console.warn(
+          `Merkl request failed for ${apiUrl}; trying fallback host: ${describeRequestError(error)}`
+        )
+      }
+    }
+  }
+
+  throw lastError
 }
 
 const buildSummary = (
