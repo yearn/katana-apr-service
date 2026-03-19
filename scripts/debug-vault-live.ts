@@ -7,13 +7,19 @@ dotenv.config()
 
 const CHAIN_ID = Number.parseInt(process.env.KATANA_CHAIN_ID ?? '747474', 10)
 const YEARN_API_URL = process.env.YDAEMON_BASE_URI || 'https://ydaemon.yearn.fi'
+const DEFAULT_MERKL_API_URL = 'https://api.merkl.xyz'
 const MERKL_API_URL = process.env.MERKL_BASE_URI || 'https://api.merkl.xyz'
 const MERKL_FALLBACK_URLS = [
   'https://api.merkl.fr',
   'https://api-merkl.angle.money',
 ] as const
+const normalizeApiUrl = (apiUrl: string): string => apiUrl.replace(/\/+$/, '')
 const MERKL_API_URLS = Array.from(
-  new Set([MERKL_API_URL, ...MERKL_FALLBACK_URLS])
+  new Set(
+    normalizeApiUrl(MERKL_API_URL) === DEFAULT_MERKL_API_URL
+      ? [normalizeApiUrl(MERKL_API_URL), ...MERKL_FALLBACK_URLS]
+      : [normalizeApiUrl(MERKL_API_URL)]
+  )
 )
 
 const WRAPPED_KAT_ADDRESSES = [

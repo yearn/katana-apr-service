@@ -78,6 +78,44 @@ describe('MerklApiService', () => {
     consoleWarn.mockRestore()
   })
 
+  it('does not fall back when a custom Merkl base URI is configured', async () => {
+    const consoleWarn = vi
+      .spyOn(console, 'warn')
+      .mockImplementation(() => undefined)
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined)
+    const customApiUrl = 'https://merkl-proxy.internal'
+    const customError = Object.assign(new Error('Bad gateway'), {
+      response: { status: 502 },
+    })
+    const params = {
+      name: 'yearn',
+      chainId: config.katanaChainId,
+      campaigns: true,
+    }
+
+    mocks.axiosGet.mockRejectedValueOnce(customError)
+
+    const service = new MerklApiService(customApiUrl)
+    const opportunities = await service.getYearnOpportunities()
+
+    expect(opportunities).toEqual([])
+    expect(mocks.axiosGet).toHaveBeenCalledTimes(1)
+    expect(mocks.axiosGet).toHaveBeenCalledWith(
+      `${customApiUrl}/v4/opportunities`,
+      { params },
+    )
+    expect(consoleWarn).not.toHaveBeenCalled()
+    expect(consoleError).toHaveBeenCalledWith(
+      'Error fetching Yearn opportunities:',
+      customError,
+    )
+
+    consoleWarn.mockRestore()
+    consoleError.mockRestore()
+  })
+
   it('logs when a blacklist removes the active APR-breakdown campaign', async () => {
     const vaultAddress = '0x93Fec6639717b6215A48E5a72a162C50DCC40d68'
     const blacklistedCampaignId =

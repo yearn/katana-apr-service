@@ -5,6 +5,7 @@ import { isAddress } from 'viem'
 import { logVaultAprDebug } from '../aprCalcs/debugLogger'
 import { isExcludedCampaignId } from './merklBlacklist'
 
+const DEFAULT_MERKL_API_URL = 'https://api.merkl.xyz'
 const MERKL_FALLBACK_URLS = [
   'https://api.merkl.fr',
   'https://api-merkl.angle.money',
@@ -25,13 +26,17 @@ const extractAddressFromIdentifier = (
   return isAddress(candidate) ? candidate : undefined
 }
 
+const normalizeApiUrl = (apiUrl: string): string => apiUrl.replace(/\/+$/, '')
+
 export class MerklApiService {
   private apiUrls: string[]
 
-  constructor() {
-    this.apiUrls = Array.from(
-      new Set([config.merklApiUrl, ...MERKL_FALLBACK_URLS])
-    )
+  constructor(apiUrl: string = config.merklApiUrl) {
+    const primaryApiUrl = normalizeApiUrl(apiUrl)
+    this.apiUrls =
+      primaryApiUrl === DEFAULT_MERKL_API_URL
+        ? Array.from(new Set([primaryApiUrl, ...MERKL_FALLBACK_URLS]))
+        : [primaryApiUrl]
   }
 
   private filterCampaigns(
