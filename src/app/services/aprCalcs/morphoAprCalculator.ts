@@ -56,17 +56,18 @@ export class MorphoAprCalculator implements APRCalculator {
     const resultEntries = _.chain(vaultStrategyPairs)
       .map(({ vault, strategies }) => {
         const vaultResults = _.chain(strategies)
-          .map((strategy) => {
+          .flatMap((strategy) => {
             const poolAddress = strategyToVault[strategy.toLowerCase()]
-            return calculateStrategyAPR(
+            const result = calculateStrategyAPR(
               strategy,
               poolAddress,
               morphoOpportunities,
               'morpho',
               MORPHO_WRAPPED_KAT_ADDRESS
             )
+
+            return result || []
           })
-          .compact()
           .value()
 
         return vaultResults.length > 0 ? [vault.address, vaultResults] : null

@@ -94,6 +94,38 @@ const findBestOpportunityByAddress = (
   )
 }
 
+const findBestStrategyOpportunity = (
+  opportunities: Opportunity[],
+  strategyAddress: string,
+  poolAddress: string
+): Opportunity | undefined => {
+  return (
+    findBestOpportunityByAddress(opportunities, strategyAddress) ||
+    findBestOpportunityByAddress(opportunities, poolAddress)
+  )
+}
+
+const createZeroStrategyResult = (
+  strategyAddress: string,
+  poolAddress: string,
+  poolType: string
+): RewardCalculatorResult[] => [
+  {
+    strategyAddress,
+    poolAddress,
+    poolType,
+    breakdown: {
+      apr: 0,
+      token: {
+        address: '',
+        symbol: '',
+        decimals: 0,
+      },
+      weight: 0,
+    },
+  },
+]
+
 /**
  * Calculates the APR breakdown for a given strategy and pool, based on available opportunities and campaigns.
  *
@@ -115,36 +147,19 @@ export const calculateStrategyAPR = (
   poolType: string,
   targetRewardTokenAddress: string
 ): RewardCalculatorResult[] | null => {
-  if (!poolAddress) {
-    console.log(`🚫 No pool address provided`)
-    return null
-  }
-
-  const opportunity = findBestOpportunityByAddress(opportunities, poolAddress)
+  const opportunity = findBestStrategyOpportunity(
+    opportunities,
+    strategyAddress,
+    poolAddress
+  )
 
   if (!opportunity?.campaigns?.length) {
     console.log(
-      `🔍 No ${poolType} opportunity found for pool ${shortenAddress(
-        poolAddress
+      `🔍 No ${poolType} opportunity found for strategy ${shortenAddress(
+        strategyAddress
       )}`
     )
-    // Return a result with 0 APR and null token details
-    return [
-      {
-        strategyAddress,
-        poolAddress,
-        poolType,
-        breakdown: {
-          apr: 0,
-          token: {
-            address: '',
-            symbol: '',
-            decimals: 0,
-          },
-          weight: 0,
-        },
-      },
-    ]
+    return createZeroStrategyResult(strategyAddress, poolAddress || '', poolType)
   }
 
   // Find all campaigns with the specified rewardToken address
@@ -193,7 +208,12 @@ export const calculateStrategyAPR = (
     })
   )
 
-  return combineTokenBreakdowns(tokenBreakdowns, 'strategyAddress')
+  const combined = combineTokenBreakdowns(tokenBreakdowns, 'strategyAddress')
+  if (combined.length === 0) {
+    return createZeroStrategyResult(strategyAddress, poolAddress, poolType)
+  }
+
+  return combined
 }
 
 /**

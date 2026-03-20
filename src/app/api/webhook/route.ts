@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 
 import { DataCacheService } from '../../services/dataCache'
-import type { YearnVaultExtra } from '../../types/yearn'
+import type { YearnStrategy, YearnVaultExtra } from '../../types/yearn'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,6 +31,8 @@ interface ParsedWebhookBody {
   blockTime: bigint
   label: string
 }
+
+const STRATEGY_APR_COMPONENT = 'katRewardsAPR'
 
 function verifyWebhookSignature(
   signatureHeader: string,
@@ -84,8 +86,34 @@ function jsonResponseWithBigInt(data: unknown): Response {
   })
 }
 
-
 const dataCacheService = new DataCacheService()
+
+function toFiniteNumber(value: number | undefined): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function buildStrategyOutputs(
+  strategies: YearnStrategy[],
+  base: Omit<KongOutput, 'address' | 'component' | 'value'>,
+): KongOutput[] {
+  return strategies.flatMap((strategy) => {
+    const address = strategy.address
+    const value = toFiniteNumber(strategy.strategyRewardsAPR)
+
+    if (!address || value == null) {
+      return []
+    }
+
+    return [
+      {
+        ...base,
+        address,
+        component: STRATEGY_APR_COMPONENT,
+        value,
+      },
+    ]
+  })
+}
 
 export async function POST(req: NextRequest): Promise<Response> {
   const secret = process.env.KONG_WEBHOOK_SECRET
@@ -118,11 +146,13 @@ export async function POST(req: NextRequest): Promise<Response> {
       if (!vault) continue
 
       const extra = vault.apr?.extra || {}
-      const base = { chainId, address, label, blockNumber, blockTime }
+      const base = { chainId, label, blockNumber, blockTime }
 
       for (const component of COMPONENTS) {
-        outputs.push({ ...base, component, value: extra[component] ?? 0 })
+        outputs.push({ ...base, address, component, value: extra[component] ?? 0 })
       }
+
+      outputs.push(...buildStrategyOutputs(vault.strategies || [], base))
     }
 
     return jsonResponseWithBigInt(outputs)

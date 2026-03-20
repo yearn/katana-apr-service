@@ -21,8 +21,20 @@ describe('/api/vaults route', () => {
     const payload = {
       '0x00000000000000000000000000000000000000aa': {
         name: 'Vault',
-        apr: 0,
+        apr: {
+          extra: {
+            katanaAppRewardsAPR: 0.118,
+            katanaRewardsAPR: 0.118,
+          },
+        },
         breakdown: [],
+        strategies: [
+          {
+            address: '0x00000000000000000000000000000000000000bb',
+            name: 'Morpho Strategy',
+            strategyRewardsAPR: 0.04,
+          },
+        ],
       },
     }
 
