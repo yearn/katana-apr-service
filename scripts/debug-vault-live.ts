@@ -2,6 +2,7 @@ import axios from 'axios'
 import dotenv from 'dotenv'
 import { isAddress } from 'viem'
 import { isExcludedCampaignId } from '../src/app/services/externalApis/merklBlacklist'
+import { KATANA_REWARD_TOKEN_ADDRESSES } from '../src/app/services/katanaRewardTokens'
 
 dotenv.config()
 
@@ -22,11 +23,9 @@ const MERKL_API_URLS = Array.from(
   )
 )
 
-const WRAPPED_KAT_ADDRESSES = [
-  '0x6E9C1F88a960fE63387eb4b71BC525a9313d8461',
-  '0x3ba1fbC4c3aEA775d335b31fb53778f46FD3a330',
-  '0x0161A31702d6CF715aaa912d64c6A190FD0093aa',
-].map((address) => address.toLowerCase())
+const WRAPPED_KAT_ADDRESSES = KATANA_REWARD_TOKEN_ADDRESSES.map((address) =>
+  address.toLowerCase(),
+)
 
 type ClassificationReason =
   | 'NO_OPPORTUNITY'
