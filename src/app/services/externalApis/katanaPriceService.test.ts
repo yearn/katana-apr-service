@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { config } from '../../config'
 import { CANONICAL_KAT_ADDRESS } from '../katanaRewardTokens'
 
+const LEGACY_KAT_ADDRESS = '0x0161A31702d6CF715aaa912d64c6A190FD0093aa'
 const WRAPPED_KAT_ADDRESS = '0x6E9C1F88a960fE63387eb4b71BC525a9313d8461'
 
 const mocks = vi.hoisted(() => ({
@@ -27,7 +28,7 @@ describe('KatanaPriceService', () => {
     resetKatanaPriceServiceCache()
   })
 
-  it('returns yDaemon price when available for the requested address', async () => {
+  it('returns yDaemon price when available for the canonical address', async () => {
     mocks.axiosGet.mockResolvedValueOnce({
       data: {
         [config.katanaChainId]: {
@@ -74,6 +75,27 @@ describe('KatanaPriceService', () => {
           vs_currencies: 'usd',
         },
       }),
+    )
+  })
+
+  it('aliases the legacy KAT address to the canonical KAT yDaemon price', async () => {
+    mocks.axiosGet.mockResolvedValueOnce({
+      data: {
+        [config.katanaChainId]: {
+          [CANONICAL_KAT_ADDRESS.toLowerCase()]: '2500000',
+        },
+      },
+    })
+
+    const service = new KatanaPriceService()
+    const price = await service.getTokenPriceUsd(
+      config.katanaChainId,
+      LEGACY_KAT_ADDRESS,
+    )
+
+    expect(price).toBe(2.5)
+    expect(mocks.axiosGet).toHaveBeenCalledWith(
+      `${config.yearnApiUrl}/prices/all`,
     )
   })
 

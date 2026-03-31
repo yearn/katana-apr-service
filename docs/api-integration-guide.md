@@ -174,7 +174,8 @@ For each campaign in the chosen opportunity:
 - Campaign reward token must be allowlisted in `KATANA_REWARD_TOKEN_ADDRESSES`:
   - `0x6E9C1F88a960fE63387eb4b71BC525a9313d8461`
   - `0x3ba1fbC4c3aEA775d335b31fb53778f46FD3a330`
-  - `0x0161A31702d6CF715aaa912d64c6A190FD0093aa`
+  - `0x7F1f4b4b29f5058fA32CC7a97141b8D7e5ABDC2d`
+  - `0x0161A31702d6CF715aaa912d64c6A190FD0093aa` (legacy alias)
 
 APR units:
 
@@ -325,7 +326,7 @@ Snippet:
   "matchingCampaign": {
     "campaignId": "0xc5a22d022154d5c64ff14b2f4071f134eb83cf159f9f846ad0ba0908a755e86d",
     "rewardToken": {
-      "address": "0x6E9C1F88a960fE63387eb4b71BC525a9313d8461",
+      "address": "0x7F1f4b4b29f5058fA32CC7a97141b8D7e5ABDC2d",
       "symbol": "KAT"
     },
     "dailyRewards": 577.3809523809524,
