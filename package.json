@@ -14,7 +14,6 @@
   "dependencies": {
     "@types/lodash": "^4.17.20",
     "@wagmi/core": "^2.14.7",
-    "axios": "^1.7.9",
     "dotenv": "^16.4.7",
     "lodash": "^4.17.21",
     "next": "15.3.8",

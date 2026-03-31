@@ -1,4 +1,3 @@
-import axios from 'axios'
 import { formatUnits } from 'viem'
 import { config } from '../../config'
 import {
@@ -140,18 +139,23 @@ export class KatanaPriceService {
 
   private async getCoinGeckoPriceUsd(): Promise<number> {
     try {
-      const response = await axios.get<CoinGeckoTokenPriceResponse>(
-        `${this.coingeckoApiUrl}/simple/price`,
+      const params = new URLSearchParams({
+        ids: this.coingeckoKatanaCoinId,
+        vs_currencies: 'usd',
+      })
+      const response = await fetch(
+        `${this.coingeckoApiUrl}/simple/price?${params}`,
         {
-          params: {
-            ids: this.coingeckoKatanaCoinId,
-            vs_currencies: 'usd',
-          },
           headers: this.coinGeckoHeaders,
         },
       )
 
-      const price = response.data?.[this.coingeckoKatanaCoinId]?.usd
+      if (!response.ok) {
+        throw new Error(`HTTP error fetching CoinGecko price: ${response.status}`)
+      }
+
+      const data = (await response.json()) as CoinGeckoTokenPriceResponse
+      const price = data?.[this.coingeckoKatanaCoinId]?.usd
       if (isPositiveFiniteNumber(price)) {
         return price
       }
@@ -167,10 +171,14 @@ export class KatanaPriceService {
     addresses: string[],
   ): Promise<number> {
     try {
-      const response = await axios.get<YDaemonPricesChain>(
-        `${this.yearnApiUrl}/prices/all`,
-      )
-      const chainPrices = response.data?.[String(chainId)]
+      const response = await fetch(`${this.yearnApiUrl}/prices/all`)
+
+      if (!response.ok) {
+        throw new Error(`HTTP error fetching yDaemon prices: ${response.status}`)
+      }
+
+      const data = (await response.json()) as YDaemonPricesChain
+      const chainPrices = data?.[String(chainId)]
 
       if (!chainPrices) {
         return 0
