@@ -24,13 +24,6 @@ const makeOkResponse = (data: unknown) =>
     json: () => Promise.resolve(data),
   })
 
-const makeErrorResponse = (status: number) =>
-  Promise.resolve({
-    ok: false,
-    status,
-    json: () => Promise.reject(new Error('error body')),
-  })
-
 describe('KatanaPriceService', () => {
   beforeEach(() => {
     vi.useRealTimers()
