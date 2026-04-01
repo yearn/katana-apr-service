@@ -2,15 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { config } from '../../config'
 
 const mocks = vi.hoisted(() => ({
-  axiosGet: vi.fn(),
+  fetchGet: vi.fn(),
   logVaultAprDebug: vi.fn(),
 }))
 
-vi.mock('axios', () => ({
-  default: {
-    get: mocks.axiosGet,
-  },
-}))
+vi.stubGlobal('fetch', mocks.fetchGet)
 
 vi.mock('../aprCalcs/debugLogger', () => ({
   logVaultAprDebug: mocks.logVaultAprDebug,
@@ -18,9 +14,23 @@ vi.mock('../aprCalcs/debugLogger', () => ({
 
 import { MerklApiService } from './merklApi'
 
+const makeOkResponse = (data: unknown) =>
+  Promise.resolve({
+    ok: true,
+    status: 200,
+    json: () => Promise.resolve(data),
+  })
+
+const makeErrorResponse = (status: number) =>
+  Promise.resolve({
+    ok: false,
+    status,
+    json: () => Promise.reject(new Error('error body')),
+  })
+
 describe('MerklApiService', () => {
   beforeEach(() => {
-    mocks.axiosGet.mockReset()
+    mocks.fetchGet.mockReset()
     mocks.logVaultAprDebug.mockReset()
   })
 
@@ -32,11 +42,6 @@ describe('MerklApiService', () => {
       new Error('getaddrinfo ENOTFOUND api.merkl.xyz'),
       { code: 'ENOTFOUND' },
     )
-    const params = {
-      name: 'yearn',
-      chainId: config.katanaChainId,
-      campaigns: true,
-    }
     const fallbackOpportunity = {
       chainId: 747474,
       name: 'Yearn Opportunity',
@@ -46,26 +51,24 @@ describe('MerklApiService', () => {
       campaigns: [],
     }
 
-    mocks.axiosGet.mockRejectedValueOnce(primaryError).mockResolvedValueOnce({
-      data: {
-        opportunities: [fallbackOpportunity],
-      },
-    })
+    mocks.fetchGet
+      .mockRejectedValueOnce(primaryError)
+      .mockImplementationOnce(() =>
+        makeOkResponse({ opportunities: [fallbackOpportunity] }),
+      )
 
     const service = new MerklApiService()
     const opportunities = await service.getYearnOpportunities()
 
     expect(opportunities).toEqual([fallbackOpportunity])
-    expect(mocks.axiosGet).toHaveBeenCalledTimes(2)
-    expect(mocks.axiosGet).toHaveBeenNthCalledWith(
+    expect(mocks.fetchGet).toHaveBeenCalledTimes(2)
+    expect(mocks.fetchGet).toHaveBeenNthCalledWith(
       1,
-      `${config.merklApiUrl}/v4/opportunities`,
-      { params },
+      expect.stringContaining(`${config.merklApiUrl}/v4/opportunities`),
     )
-    expect(mocks.axiosGet).toHaveBeenNthCalledWith(
+    expect(mocks.fetchGet).toHaveBeenNthCalledWith(
       2,
-      'https://api.merkl.fr/v4/opportunities',
-      { params },
+      expect.stringContaining('https://api.merkl.fr/v4/opportunities'),
     )
     expect(consoleWarn).toHaveBeenCalledWith(
       expect.stringContaining(
@@ -84,30 +87,21 @@ describe('MerklApiService', () => {
       .spyOn(console, 'error')
       .mockImplementation(() => undefined)
     const customApiUrl = 'https://merkl-proxy.internal'
-    const customError = Object.assign(new Error('Bad gateway'), {
-      response: { status: 502 },
-    })
-    const params = {
-      name: 'yearn',
-      chainId: config.katanaChainId,
-      campaigns: true,
-    }
 
-    mocks.axiosGet.mockRejectedValueOnce(customError)
+    mocks.fetchGet.mockImplementationOnce(() => makeErrorResponse(502))
 
     const service = new MerklApiService(customApiUrl)
     const opportunities = await service.getYearnOpportunities()
 
     expect(opportunities).toEqual([])
-    expect(mocks.axiosGet).toHaveBeenCalledTimes(1)
-    expect(mocks.axiosGet).toHaveBeenCalledWith(
-      `${customApiUrl}/v4/opportunities`,
-      { params },
+    expect(mocks.fetchGet).toHaveBeenCalledTimes(1)
+    expect(mocks.fetchGet).toHaveBeenCalledWith(
+      expect.stringContaining(`${customApiUrl}/v4/opportunities`),
     )
     expect(consoleWarn).not.toHaveBeenCalled()
     expect(consoleError).toHaveBeenCalledWith(
       'Error fetching Yearn opportunities:',
-      customError,
+      expect.any(Error),
     )
 
     consoleWarn.mockRestore()
@@ -115,21 +109,16 @@ describe('MerklApiService', () => {
   })
 
   it('queries sushiswap opportunities using the live Merkl name filter', async () => {
-    mocks.axiosGet.mockResolvedValue({
-      data: [],
-    })
+    mocks.fetchGet.mockImplementation(() => makeOkResponse([]))
 
     const service = new MerklApiService()
     await service.getSushiOpportunities()
 
-    expect(mocks.axiosGet).toHaveBeenCalledWith(
-      expect.stringContaining('/v4/opportunities'),
-      expect.objectContaining({
-        params: expect.objectContaining({
-          name: 'sushiswap',
-          campaigns: true,
-        }),
-      }),
+    expect(mocks.fetchGet).toHaveBeenCalledWith(
+      expect.stringMatching(/\/v4\/opportunities\?.*name=sushiswap/),
+    )
+    expect(mocks.fetchGet).toHaveBeenCalledWith(
+      expect.stringMatching(/\/v4\/opportunities\?.*campaigns=true/),
     )
   })
 
@@ -138,8 +127,8 @@ describe('MerklApiService', () => {
     const blacklistedCampaignId =
       '0xc5a22d022154d5c64ff14b2f4071f134eb83cf159f9f846ad0ba0908a755e86d'
 
-    mocks.axiosGet.mockResolvedValue({
-      data: [
+    mocks.fetchGet.mockImplementation(() =>
+      makeOkResponse([
         {
           chainId: 747474,
           name: 'AUSD Opportunity',
@@ -182,8 +171,8 @@ describe('MerklApiService', () => {
             ],
           },
         },
-      ],
-    })
+      ]),
+    )
 
     const service = new MerklApiService()
     const opportunities = await service.getErc20LogProcessorOpportunities()
@@ -217,48 +206,33 @@ describe('MerklApiService', () => {
       new Error('getaddrinfo ENOTFOUND api.merkl.xyz'),
       { code: 'ENOTFOUND' },
     )
-    const secondError = Object.assign(new Error('Route not found'), {
-      response: { status: 404 },
-    })
-    const thirdError = Object.assign(new Error('Gateway timeout'), {
-      response: { status: 504 },
-    })
-    const params = {
-      status: 'LIVE',
-      chainId: config.katanaChainId,
-      type: 'ERC20_FIX_APR',
-      campaigns: true,
-    }
 
-    mocks.axiosGet
+    mocks.fetchGet
       .mockRejectedValueOnce(firstError)
-      .mockRejectedValueOnce(secondError)
-      .mockRejectedValueOnce(thirdError)
+      .mockImplementationOnce(() => makeErrorResponse(404))
+      .mockImplementationOnce(() => makeErrorResponse(504))
 
     const service = new MerklApiService()
     const opportunities = await service.getErc20FixAprOpportunities()
 
     expect(opportunities).toEqual([])
-    expect(mocks.axiosGet).toHaveBeenCalledTimes(3)
-    expect(mocks.axiosGet).toHaveBeenNthCalledWith(
+    expect(mocks.fetchGet).toHaveBeenCalledTimes(3)
+    expect(mocks.fetchGet).toHaveBeenNthCalledWith(
       1,
-      `${config.merklApiUrl}/v4/opportunities`,
-      { params },
+      expect.stringContaining(`${config.merklApiUrl}/v4/opportunities`),
     )
-    expect(mocks.axiosGet).toHaveBeenNthCalledWith(
+    expect(mocks.fetchGet).toHaveBeenNthCalledWith(
       2,
-      'https://api.merkl.fr/v4/opportunities',
-      { params },
+      expect.stringContaining('https://api.merkl.fr/v4/opportunities'),
     )
-    expect(mocks.axiosGet).toHaveBeenNthCalledWith(
+    expect(mocks.fetchGet).toHaveBeenNthCalledWith(
       3,
-      'https://api-merkl.angle.money/v4/opportunities',
-      { params },
+      expect.stringContaining('https://api-merkl.angle.money/v4/opportunities'),
     )
     expect(consoleWarn).toHaveBeenCalledTimes(2)
     expect(consoleError).toHaveBeenCalledWith(
       'Error fetching ERC20 Fixed APR opportunities:',
-      thirdError,
+      expect.any(Error),
     )
 
     consoleWarn.mockRestore()

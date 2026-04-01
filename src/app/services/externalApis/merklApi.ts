@@ -1,4 +1,3 @@
-import axios from 'axios'
 import { config } from '../../config'
 import type { MerklOpportunity } from '../../types'
 import { isAddress } from 'viem'
@@ -112,15 +111,13 @@ export class MerklApiService {
       return String(error)
     }
 
-    const axiosLikeError = error as Error & {
-      code?: string
-      response?: { status?: number }
+    const fetchLikeError = error as Error & {
+      status?: number
     }
 
     const details = [
-      axiosLikeError.code,
-      axiosLikeError.response?.status
-        ? `status ${axiosLikeError.response.status}`
+      fetchLikeError.status
+        ? `status ${fetchLikeError.status}`
         : undefined,
     ].filter((value): value is string => !!value)
 
@@ -138,12 +135,23 @@ export class MerklApiService {
       const apiUrl = this.apiUrls[index]
 
       try {
-        const response = await axios.get<MerklOpportunitiesResponse>(
-          `${apiUrl}/v4/opportunities`,
-          { params },
+        const searchParams = new URLSearchParams(
+          Object.entries(params).map(([k, v]) => [k, String(v)]),
+        )
+        const response = await fetch(
+          `${apiUrl}/v4/opportunities?${searchParams}`,
         )
 
-        return this.normalizeOpportunities(response.data)
+        if (!response.ok) {
+          const httpError = Object.assign(
+            new Error(`HTTP error fetching Merkl opportunities`),
+            { status: response.status },
+          )
+          throw httpError
+        }
+
+        const data = (await response.json()) as MerklOpportunitiesResponse
+        return this.normalizeOpportunities(data)
       } catch (error) {
         lastError = error
 

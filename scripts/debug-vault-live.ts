@@ -1,4 +1,3 @@
-import axios from 'axios'
 import dotenv from 'dotenv'
 import { isAddress } from 'viem'
 import { isExcludedCampaignId } from '../src/app/services/externalApis/merklBlacklist'
@@ -271,11 +270,13 @@ const fetchYearnVaults = async (): Promise<YearnVault[]> => {
     limit: '2500',
   })
 
-  const response = await axios.get<YearnVault[]>(
-    `${YEARN_API_URL}/vaults/katana?${params}`
-  )
+  const response = await fetch(`${YEARN_API_URL}/vaults/katana?${params}`)
 
-  return response.data || []
+  if (!response.ok) {
+    throw new Error(`HTTP error fetching Yearn vaults: ${response.status}`)
+  }
+
+  return ((await response.json()) as YearnVault[]) || []
 }
 
 const applyCampaignBlacklist = (
@@ -310,15 +311,13 @@ const describeRequestError = (error: unknown): string => {
     return String(error)
   }
 
-  const axiosLikeError = error as Error & {
-    code?: string
-    response?: { status?: number }
+  const fetchLikeError = error as Error & {
+    status?: number
   }
 
   const details = [
-    axiosLikeError.code,
-    axiosLikeError.response?.status
-      ? `status ${axiosLikeError.response.status}`
+    fetchLikeError.status
+      ? `status ${fetchLikeError.status}`
       : undefined,
   ].filter((value): value is string => !!value)
 
@@ -328,23 +327,34 @@ const describeRequestError = (error: unknown): string => {
 }
 
 const fetchMerklOpportunities = async (): Promise<MerklOpportunity[]> => {
-  const params = {
+  const searchParams = new URLSearchParams({
     status: 'LIVE',
-    chainId: CHAIN_ID,
+    chainId: String(CHAIN_ID),
     type: 'ERC20LOGPROCESSOR',
-    campaigns: true,
-  }
+    campaigns: 'true',
+  })
   let lastError: unknown
 
   for (let index = 0; index < MERKL_API_URLS.length; index += 1) {
     const apiUrl = MERKL_API_URLS[index]
 
     try {
-      const response = await axios.get<
-        MerklOpportunity[] | { opportunities: MerklOpportunity[] }
-      >(`${apiUrl}/v4/opportunities`, { params })
+      const response = await fetch(
+        `${apiUrl}/v4/opportunities?${searchParams}`,
+      )
 
-      return applyCampaignBlacklist(normalizeMerklOpportunities(response.data))
+      if (!response.ok) {
+        const httpError = Object.assign(
+          new Error(`HTTP error fetching Merkl opportunities`),
+          { status: response.status },
+        )
+        throw httpError
+      }
+
+      const data = (await response.json()) as
+        | MerklOpportunity[]
+        | { opportunities: MerklOpportunity[] }
+      return applyCampaignBlacklist(normalizeMerklOpportunities(data))
     } catch (error) {
       lastError = error
 
