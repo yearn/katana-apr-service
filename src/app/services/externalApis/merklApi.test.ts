@@ -64,11 +64,11 @@ describe('MerklApiService', () => {
     expect(mocks.fetchGet).toHaveBeenCalledTimes(2)
     expect(mocks.fetchGet).toHaveBeenNthCalledWith(
       1,
-      expect.stringContaining(`${config.merklApiUrl}/v4/opportunities`),
+      expect.stringMatching(new RegExp(`${config.merklApiUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/v4/opportunities.*items=100.*page=0`)),
     )
     expect(mocks.fetchGet).toHaveBeenNthCalledWith(
       2,
-      expect.stringContaining('https://api.merkl.fr/v4/opportunities'),
+      expect.stringMatching(/https:\/\/api\.merkl\.fr\/v4\/opportunities.*items=100.*page=0/),
     )
     expect(consoleWarn).toHaveBeenCalledWith(
       expect.stringContaining(
@@ -96,7 +96,7 @@ describe('MerklApiService', () => {
     expect(opportunities).toEqual([])
     expect(mocks.fetchGet).toHaveBeenCalledTimes(1)
     expect(mocks.fetchGet).toHaveBeenCalledWith(
-      expect.stringContaining(`${customApiUrl}/v4/opportunities`),
+      expect.stringMatching(/https:\/\/merkl-proxy\.internal\/v4\/opportunities.*items=100.*page=0/),
     )
     expect(consoleWarn).not.toHaveBeenCalled()
     expect(consoleError).toHaveBeenCalledWith(
@@ -119,6 +119,49 @@ describe('MerklApiService', () => {
     )
     expect(mocks.fetchGet).toHaveBeenCalledWith(
       expect.stringMatching(/\/v4\/opportunities\?.*campaigns=true/),
+    )
+    expect(mocks.fetchGet).toHaveBeenCalledWith(
+      expect.stringMatching(/\/v4\/opportunities\?.*items=100/),
+    )
+    expect(mocks.fetchGet).toHaveBeenCalledWith(
+      expect.stringMatching(/\/v4\/opportunities\?.*page=0/),
+    )
+  })
+
+  it('fetches additional Merkl pages when the current page is full', async () => {
+    const firstPage = Array.from({ length: 100 }, (_, index) => ({
+      chainId: 747474,
+      name: `Opportunity ${index}`,
+      tvl: index,
+      status: 'LIVE',
+      identifier: `0x${String(index).padStart(40, '0')}`,
+      campaigns: [],
+    }))
+    const secondPageOpportunity = {
+      chainId: 747474,
+      name: 'Opportunity 101',
+      tvl: 101,
+      status: 'LIVE',
+      identifier: '0x0000000000000000000000000000000000000101',
+      campaigns: [],
+    }
+
+    mocks.fetchGet
+      .mockImplementationOnce(() => makeOkResponse(firstPage))
+      .mockImplementationOnce(() => makeOkResponse([secondPageOpportunity]))
+
+    const service = new MerklApiService()
+    const opportunities = await service.getErc20LogProcessorOpportunities()
+
+    expect(opportunities).toHaveLength(101)
+    expect(opportunities[100]).toEqual(secondPageOpportunity)
+    expect(mocks.fetchGet).toHaveBeenNthCalledWith(
+      1,
+      expect.stringMatching(/\/v4\/opportunities\?.*items=100.*page=0/),
+    )
+    expect(mocks.fetchGet).toHaveBeenNthCalledWith(
+      2,
+      expect.stringMatching(/\/v4\/opportunities\?.*items=100.*page=1/),
     )
   })
 
@@ -219,15 +262,15 @@ describe('MerklApiService', () => {
     expect(mocks.fetchGet).toHaveBeenCalledTimes(3)
     expect(mocks.fetchGet).toHaveBeenNthCalledWith(
       1,
-      expect.stringContaining(`${config.merklApiUrl}/v4/opportunities`),
+      expect.stringMatching(new RegExp(`${config.merklApiUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/v4/opportunities.*items=100.*page=0`)),
     )
     expect(mocks.fetchGet).toHaveBeenNthCalledWith(
       2,
-      expect.stringContaining('https://api.merkl.fr/v4/opportunities'),
+      expect.stringMatching(/https:\/\/api\.merkl\.fr\/v4\/opportunities.*items=100.*page=0/),
     )
     expect(mocks.fetchGet).toHaveBeenNthCalledWith(
       3,
-      expect.stringContaining('https://api-merkl.angle.money/v4/opportunities'),
+      expect.stringMatching(/https:\/\/api-merkl\.angle\.money\/v4\/opportunities.*items=100.*page=0/),
     )
     expect(consoleWarn).toHaveBeenCalledTimes(2)
     expect(consoleError).toHaveBeenCalledWith(

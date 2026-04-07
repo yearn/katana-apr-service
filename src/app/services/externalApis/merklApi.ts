@@ -25,6 +25,8 @@ const extractAddressFromIdentifier = (
   return isAddress(candidate) ? candidate : undefined
 }
 
+const MERKL_PAGE_SIZE = 100
+
 const normalizeApiUrl = (apiUrl: string): string => apiUrl.replace(/\/+$/, '')
 
 export class MerklApiService {
@@ -135,23 +137,36 @@ export class MerklApiService {
       const apiUrl = this.apiUrls[index]
 
       try {
-        const searchParams = new URLSearchParams(
-          Object.entries(params).map(([k, v]) => [k, String(v)]),
-        )
-        const response = await fetch(
-          `${apiUrl}/v4/opportunities?${searchParams}`,
-        )
+        const aggregatedOpportunities: MerklOpportunity[] = []
 
-        if (!response.ok) {
-          const httpError = Object.assign(
-            new Error(`HTTP error fetching Merkl opportunities`),
-            { status: response.status },
+        for (let page = 0; ; page += 1) {
+          const searchParams = new URLSearchParams(
+            Object.entries({
+              ...params,
+              items: MERKL_PAGE_SIZE,
+              page,
+            }).map(([k, v]) => [k, String(v)]),
           )
-          throw httpError
-        }
+          const response = await fetch(
+            `${apiUrl}/v4/opportunities?${searchParams}`,
+          )
 
-        const data = (await response.json()) as MerklOpportunitiesResponse
-        return this.normalizeOpportunities(data)
+          if (!response.ok) {
+            const httpError = Object.assign(
+              new Error(`HTTP error fetching Merkl opportunities`),
+              { status: response.status },
+            )
+            throw httpError
+          }
+
+          const data = (await response.json()) as MerklOpportunitiesResponse
+          const pageOpportunities = this.normalizeOpportunities(data)
+          aggregatedOpportunities.push(...pageOpportunities)
+
+          if (pageOpportunities.length < MERKL_PAGE_SIZE) {
+            return aggregatedOpportunities
+          }
+        }
       } catch (error) {
         lastError = error
 

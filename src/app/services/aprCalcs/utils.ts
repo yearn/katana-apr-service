@@ -145,13 +145,16 @@ export const calculateStrategyAPR = (
   poolAddress: string,
   opportunities: Opportunity[],
   poolType: string,
-  targetRewardTokenAddress: string
+  targetRewardTokenAddress: string | string[]
 ): RewardCalculatorResult[] | null => {
   const opportunity = findBestStrategyOpportunity(
     opportunities,
     strategyAddress,
     poolAddress
   )
+  const targetRewardTokenAddresses = Array.isArray(targetRewardTokenAddress)
+    ? targetRewardTokenAddress
+    : [targetRewardTokenAddress]
 
   if (!opportunity?.campaigns?.length) {
     console.log(
@@ -165,9 +168,8 @@ export const calculateStrategyAPR = (
   // Find all campaigns with the specified rewardToken address
 
   const targetCampaigns = opportunity.campaigns.filter((campaign: Campaign) => {
-    return safeIsAddressEqual(
-      campaign.rewardToken.address,
-      targetRewardTokenAddress
+    return targetRewardTokenAddresses.some((address) =>
+      safeIsAddressEqual(campaign.rewardToken.address, address)
     )
   })
 

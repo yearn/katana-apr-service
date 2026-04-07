@@ -4,6 +4,7 @@ import { MerklApiService } from '../externalApis/merklApi'
 import { YearnApiService } from '../externalApis/yearnApi'
 import { ContractReaderService } from '../contractReader'
 import type { APRCalculator, RewardCalculatorResult } from './types'
+import { KATANA_REWARD_TOKEN_ADDRESSES } from '../katanaRewardTokens'
 import { calculateStrategyAPR } from './utils'
 
 export class SushiAprCalculator implements APRCalculator {
@@ -20,9 +21,15 @@ export class SushiAprCalculator implements APRCalculator {
   async calculateVaultAPRs(
     vaults: YearnVault[]
   ): Promise<Record<string, RewardCalculatorResult[]>> {
-    const sushiOpportunities = await this.merklApi.getSushiOpportunities()
-    const SUSHI_WRAPPED_KAT_ADDRESS =
-      '0x6E9C1F88a960fE63387eb4b71BC525a9313d8461'
+    const [sushiPoolOpportunities, directStrategyOpportunities] =
+      await Promise.all([
+        this.merklApi.getSushiOpportunities(),
+        this.merklApi.getErc20LogProcessorOpportunities(),
+      ])
+    const sushiOpportunities = [
+      ...directStrategyOpportunities,
+      ...sushiPoolOpportunities,
+    ]
 
     const vaultStrategyPairs = _.chain(vaults)
       .map((vault) => ({
@@ -67,7 +74,7 @@ export class SushiAprCalculator implements APRCalculator {
               poolAddress,
               sushiOpportunities,
               'sushi',
-              SUSHI_WRAPPED_KAT_ADDRESS
+              [...KATANA_REWARD_TOKEN_ADDRESSES]
             )
 
             return result || []
