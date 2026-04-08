@@ -4,6 +4,7 @@ import { MerklApiService } from '../externalApis/merklApi'
 import { YearnApiService } from '../externalApis/yearnApi'
 import { ContractReaderService } from '../contractReader'
 import type { APRCalculator, RewardCalculatorResult } from './types'
+import { KATANA_REWARD_TOKEN_ADDRESSES } from '../katanaRewardTokens'
 import { calculateStrategyAPR } from './utils'
 
 export class MorphoAprCalculator implements APRCalculator {
@@ -21,8 +22,6 @@ export class MorphoAprCalculator implements APRCalculator {
     vaults: YearnVault[]
   ): Promise<Record<string, RewardCalculatorResult[]>> {
     const morphoOpportunities = await this.merklApi.getMorphoOpportunities()
-    const MORPHO_WRAPPED_KAT_ADDRESS =
-      '0x3ba1fbC4c3aEA775d335b31fb53778f46FD3a330'
 
     const vaultStrategyPairs = _.chain(vaults)
       .map((vault) => ({
@@ -63,7 +62,7 @@ export class MorphoAprCalculator implements APRCalculator {
               poolAddress,
               morphoOpportunities,
               'morpho',
-              MORPHO_WRAPPED_KAT_ADDRESS
+              [...KATANA_REWARD_TOKEN_ADDRESSES]
             )
 
             return result || []
