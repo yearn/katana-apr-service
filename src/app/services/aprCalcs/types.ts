@@ -1,6 +1,8 @@
+import type { YearnVault } from '../../types'
+
 export interface APRCalculator {
   calculateVaultAPRs(
-    vaults: any[]
+    vaults: YearnVault[]
   ): Promise<Record<string, RewardCalculatorResult[]>>
 }
 
@@ -27,6 +29,10 @@ export interface YearnRewardCalculatorResult {
   poolType: string // e.g., 'morpho', 'steer'
   breakdown: TokenBreakdown
 }
+
+export type VaultRewardCalculatorResult =
+  | RewardCalculatorResult
+  | YearnRewardCalculatorResult
 
 export interface Campaign {
   campaignId?: string

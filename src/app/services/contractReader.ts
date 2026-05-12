@@ -27,7 +27,7 @@ export class ContractReaderService {
         steerLpResults
       )
         .map((result, index) =>
-          result.status
+          result.status === 'success' && result.result
             ? {
                 strategy: strategyAddresses[index],
                 steerLp: getAddress(result.result as string),
@@ -94,7 +94,7 @@ export class ContractReaderService {
         morphoVaultResults
       )
         .map((result, index) =>
-          result.status
+          result.status === 'success' && result.result
             ? [strategyAddresses[index], getAddress(result.result as string)]
             : null
         )

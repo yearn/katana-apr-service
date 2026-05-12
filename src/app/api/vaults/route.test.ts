@@ -21,8 +21,20 @@ describe('/api/vaults route', () => {
     const payload = {
       '0x00000000000000000000000000000000000000aa': {
         name: 'Vault',
-        apr: 0,
+        apr: {
+          extra: {
+            katanaAppRewardsAPR: 0.118,
+            katanaRewardsAPR: 0.118,
+          },
+        },
         breakdown: [],
+        strategies: [
+          {
+            address: '0x00000000000000000000000000000000000000bb',
+            name: 'Morpho Strategy',
+            strategyRewardsAPR: 0.04,
+          },
+        ],
       },
     }
 
@@ -33,7 +45,9 @@ describe('/api/vaults route', () => {
 
     expect(response.status).toBe(200)
     expect(body).toEqual(payload)
-    expect(response.headers.get('Cache-Control')).toContain('s-maxage=900')
+    expect(response.headers.get('Cache-Control')).toBe(
+      'public, max-age=0, s-maxage=60, stale-while-revalidate=60',
+    )
     expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*')
   })
 

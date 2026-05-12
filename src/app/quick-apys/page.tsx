@@ -5,128 +5,126 @@ import Link from 'next/link'
 
 import type { YearnVault } from '../types/yearn'
 
+type StrategyDisplay = {
+  key: string
+  name: string
+  status: string
+  netAPR: string
+  strategyRewardsAPR: string
+}
+
 type VaultDisplay = {
   key: string
   name: string
-  netAPR: string
-  katanaRewardsAPR: string
+  monthlyNetAPY: string
   katanaAppRewardsAPR: string
   fixedRateKatanaRewards: string
-  katanaBonusAPY: string
-  katanaNativeYield: string
   totalAPR: string
+  strategies: StrategyDisplay[]
+}
+
+const formatPercent = (value: number | undefined): string =>
+  ((value || 0) * 100).toFixed(2)
+
+const parseVaultResponse = (data: unknown): YearnVault[] => {
+  if (
+    data &&
+    typeof data === 'object' &&
+    'vaults' in data &&
+    data.vaults !== undefined
+  ) {
+    if (Array.isArray(data.vaults)) {
+      return data.vaults as YearnVault[]
+    }
+
+    if (data.vaults && typeof data.vaults === 'object') {
+      return Object.values(data.vaults as Record<string, YearnVault>)
+    }
+  }
+
+  if (Array.isArray(data)) {
+    return data as YearnVault[]
+  }
+
+  if (data && typeof data === 'object') {
+    return Object.values(data as Record<string, YearnVault>)
+  }
+
+  return []
 }
 
 export default function QuickAPYs(): React.ReactElement {
   const [vaults, setVaults] = useState<VaultDisplay[]>([])
+  const [expandedVaults, setExpandedVaults] = useState<Record<string, boolean>>(
+    {},
+  )
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    console.log('Fetching vaults...')
     fetch('/api/vaults')
       .then((res) => {
-        console.log('Fetch response:', res)
-        if (!res.ok) throw new Error('Failed to fetch vaults')
+        if (!res.ok) {
+          throw new Error('Failed to fetch vaults')
+        }
+
         return res.json()
       })
       .then((data) => {
-        console.log('Fetched data:', data)
-        let vaultsArr: YearnVault[] = []
-        // If the API returns { vaults: ... }
-        if (data && data.vaults !== undefined) {
-          console.log(
-            'Parsing vaults, typeof data.vaults:',
-            typeof data.vaults,
-            'Array.isArray:',
-            Array.isArray(data.vaults)
-          )
-          if (
-            data.vaults &&
-            typeof data.vaults === 'object' &&
-            !Array.isArray(data.vaults)
-          ) {
-            vaultsArr = Object.values(data.vaults)
-            console.log('Converted vaults object to array:', vaultsArr)
-          } else if (Array.isArray(data.vaults)) {
-            vaultsArr = data.vaults
-            console.log('Using vaults array directly:', vaultsArr)
-          } else {
-            console.log(
-              'No vaults found or vaults is not an object/array:',
-              data.vaults
-            )
-          }
-        } else if (data && typeof data === 'object' && !Array.isArray(data)) {
-          // If the API returns the vaults object directly
-          vaultsArr = Object.values(data)
-          console.log(
-            'API returned vaults object directly, converted to array:',
-            vaultsArr
-          )
-        } else if (Array.isArray(data)) {
-          // If the API returns the vaults array directly
-          vaultsArr = data
-          console.log('API returned vaults array directly:', vaultsArr)
-        } else {
-          console.log('No vaults found or data is not an object/array:', data)
-        }
+        const vaultsArr = parseVaultResponse(data)
         const displayVaults: VaultDisplay[] = vaultsArr.map((vault) => {
-          const netAPR =
-            vault.apr && typeof vault.apr.netAPR === 'number'
-              ? vault.apr.netAPR
-              : 0
-          const katanaRewardsAPR = vault.apr?.extra?.katanaRewardsAPR || 0
+          const monthlyNetAPY = vault.apr?.netAPR || 0
           const katanaAppRewardsAPR = vault.apr?.extra?.katanaAppRewardsAPR || 0
           const fixedRateKatanaRewards =
             vault.apr?.extra?.fixedRateKatanaRewards || 0
-          const katanaBonusAPY = vault.apr?.extra?.katanaBonusAPY || 0
-          const katanaNativeYield = vault.apr?.extra?.katanaNativeYield || 0
-
-          // Calculate total APR as sum of all components
           const totalAPR =
-            netAPR +
-            katanaAppRewardsAPR +
-            fixedRateKatanaRewards +
-            katanaBonusAPY +
-            katanaNativeYield
+            monthlyNetAPY + katanaAppRewardsAPR + fixedRateKatanaRewards
 
           return {
             key: vault.address,
             name: vault.name,
-            netAPR: (netAPR * 100).toFixed(2),
-            katanaRewardsAPR: (katanaRewardsAPR * 100).toFixed(2),
-            katanaAppRewardsAPR: (katanaAppRewardsAPR * 100).toFixed(2),
-            fixedRateKatanaRewards: (fixedRateKatanaRewards * 100).toFixed(2),
-            katanaBonusAPY: (katanaBonusAPY * 100).toFixed(2),
-            katanaNativeYield: (katanaNativeYield * 100).toFixed(2),
-            totalAPR: (totalAPR * 100).toFixed(2),
+            monthlyNetAPY: formatPercent(monthlyNetAPY),
+            katanaAppRewardsAPR: formatPercent(katanaAppRewardsAPR),
+            fixedRateKatanaRewards: formatPercent(fixedRateKatanaRewards),
+            totalAPR: formatPercent(totalAPR),
+            strategies: (vault.strategies || []).map((strategy) => ({
+              key: strategy.address,
+              name: strategy.name,
+              status: strategy.status || 'unknown',
+              netAPR: formatPercent(strategy.netAPR),
+              strategyRewardsAPR: formatPercent(strategy.strategyRewardsAPR),
+            })),
           }
         })
-        console.log('Display vaults:', displayVaults)
+
         setVaults(displayVaults)
         setLoading(false)
       })
-      .catch((err) => {
-        console.error('Error fetching vaults:', err)
+      .catch((err: Error) => {
         setError(err.message)
         setLoading(false)
       })
   }, [])
 
+  const toggleVault = (vaultKey: string): void => {
+    setExpandedVaults((current) => ({
+      ...current,
+      [vaultKey]: !current[vaultKey],
+    }))
+  }
+
   return (
-    <main className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-white to-gray-100 dark:from-[#18181b] dark:to-[#23232a] px-4 py-12">
-      <section className="w-full max-w-6xl bg-white/80 dark:bg-zinc-900/80 rounded-2xl shadow-xl p-8 flex flex-col items-center gap-8 border border-zinc-200 dark:border-zinc-800">
-        <h1 className="text-3xl font-bold text-center text-zinc-900 dark:text-white tracking-tight mb-2">
+    <main className="flex min-h-screen flex-col items-center justify-start bg-gradient-to-b from-white to-gray-100 px-4 py-6 dark:from-[#18181b] dark:to-[#23232a]">
+      <section className="flex min-h-[calc(100vh-3rem)] w-full max-w-6xl flex-col items-center gap-8 rounded-2xl bg-white/80 p-8 shadow-xl dark:bg-zinc-900/80">
+        <h1 className="mb-2 text-center text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">
           Quick APYs
         </h1>
-        <p className="text-sm text-zinc-600 dark:text-zinc-400 text-center mb-4">
-          Comprehensive breakdown of all APR components including rewards,
-          bonuses, and yields
+        <p className="mb-4 text-center text-sm text-zinc-600 dark:text-zinc-400">
+          Vault-level APR summary with expandable strategy-level KAT rewards.
         </p>
         <Link
           href="/"
-          className="text-blue-600 dark:text-blue-400 underline mb-4"
+          className="mb-4 text-blue-600 underline dark:text-blue-400"
         >
           ← Back to Home
         </Link>
@@ -136,94 +134,129 @@ export default function QuickAPYs(): React.ReactElement {
           <p className="text-red-600 dark:text-red-400">{error}</p>
         ) : (
           <>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[800px]">
+            <div className="w-full overflow-x-auto">
+              <table className="min-w-[980px] w-full table-fixed border-collapse text-left">
+                <colgroup>
+                  <col className="w-[40%]" />
+                  <col className="w-[15%]" />
+                  <col className="w-[15%]" />
+                  <col className="w-[15%]" />
+                  <col className="w-[15%]" />
+                </colgroup>
                 <thead>
                   <tr>
-                    <th className="px-2 py-2 border-b border-zinc-300 dark:border-zinc-700 text-sm">
-                      Name
+                    <th className="whitespace-nowrap px-2 py-2 text-sm text-zinc-500 dark:text-zinc-400">
+                      Vault
                     </th>
-                    <th className="px-2 py-2 border-b border-zinc-300 dark:border-zinc-700 text-right text-sm">
-                      Net APR (%)
+                    <th className="whitespace-nowrap px-1 py-2 text-right text-sm text-zinc-500 dark:text-zinc-400">
+                      monthlyNetAPY (%)
                     </th>
-                    <th className="px-2 py-2 border-b border-zinc-300 dark:border-zinc-700 text-right text-sm">
-                      Katana App APR (%)
+                    <th className="whitespace-nowrap px-1 py-2 text-right text-sm text-zinc-500 dark:text-zinc-400">
+                      KAT Strategy APR (%)
                     </th>
-                    <th className="px-2 py-2 border-b border-zinc-300 dark:border-zinc-700 text-right text-sm">
-                      Fixed Rate APR (%)
+                    <th className="whitespace-nowrap px-1 py-2 text-right text-sm text-zinc-500 dark:text-zinc-400">
+                      KAT Vault Bonus APR (%)
                     </th>
-                    <th className="px-2 py-2 border-b border-zinc-300 dark:border-zinc-700 text-right text-sm">
-                      Bonus APY (%)
-                    </th>
-                    <th className="px-2 py-2 border-b border-zinc-300 dark:border-zinc-700 text-right text-sm">
-                      Native Yield (%)
-                    </th>
-                    <th className="px-2 py-2 border-b border-zinc-300 dark:border-zinc-700 text-right text-sm font-bold">
+                    <th className="whitespace-nowrap px-1 py-2 text-right text-sm font-bold text-zinc-500 dark:text-zinc-400">
                       Total APR (%)
                     </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {vaults.map((vault) => (
-                    <tr key={vault.key}>
-                      <td className="px-2 py-2 border-b border-zinc-200 dark:border-zinc-800 text-sm">
-                        {vault.name}
-                      </td>
-                      <td className="px-2 py-2 border-b border-zinc-200 dark:border-zinc-800 text-right text-sm">
-                        {vault.netAPR}%
-                      </td>
-                      <td className="px-2 py-2 border-b border-zinc-200 dark:border-zinc-800 text-right text-sm">
-                        {vault.katanaAppRewardsAPR}%
-                      </td>
-                      <td className="px-2 py-2 border-b border-zinc-200 dark:border-zinc-800 text-right text-sm">
-                        {vault.fixedRateKatanaRewards}%
-                      </td>
-                      <td className="px-2 py-2 border-b border-zinc-200 dark:border-zinc-800 text-right text-sm">
-                        {vault.katanaBonusAPY}%
-                      </td>
-                      <td className="px-2 py-2 border-b border-zinc-200 dark:border-zinc-800 text-right text-sm">
-                        {vault.katanaNativeYield}%
-                      </td>
-                      <td className="px-2 py-2 border-b border-zinc-200 dark:border-zinc-800 text-right text-sm font-bold">
-                        {vault.totalAPR}%
-                      </td>
-                    </tr>
-                  ))}
+                  {vaults.map((vault) => {
+                    const isExpanded = expandedVaults[vault.key] || false
+
+                    return (
+                      <React.Fragment key={vault.key}>
+                        <tr className="align-top">
+                          <td className="px-2 py-3 text-sm">
+                            <button
+                              type="button"
+                              onClick={() => toggleVault(vault.key)}
+                              className="flex w-full items-center gap-3 text-left text-zinc-900 dark:text-zinc-100"
+                              aria-expanded={isExpanded}
+                            >
+                              <span className="inline-flex h-6 w-6 items-center justify-center rounded bg-zinc-100 text-xs dark:bg-zinc-800">
+                                {isExpanded ? '−' : '+'}
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate font-medium">
+                                  {vault.name}
+                                </span>
+                                <span className="block text-xs text-zinc-500 dark:text-zinc-400">
+                                  {vault.strategies.length} strategies
+                                </span>
+                              </span>
+                            </button>
+                          </td>
+                          <td className="px-1 py-3 text-right text-sm tabular-nums">
+                            {vault.monthlyNetAPY}%
+                          </td>
+                          <td className="px-1 py-3 text-right text-sm tabular-nums">
+                            {vault.katanaAppRewardsAPR}%
+                          </td>
+                          <td className="px-1 py-3 text-right text-sm tabular-nums">
+                            {vault.fixedRateKatanaRewards}%
+                          </td>
+                          <td className="px-1 py-3 text-right text-sm font-bold tabular-nums">
+                            {vault.totalAPR}%
+                          </td>
+                        </tr>
+                        {isExpanded ? (
+                          vault.strategies.length > 0 ? (
+                            vault.strategies.map((strategy) => (
+                              <tr
+                                key={strategy.key}
+                                className="text-zinc-700 dark:text-zinc-300"
+                              >
+                                <td className="px-2 py-2 text-sm">
+                                  <div className="flex items-center gap-3 pl-9">
+                                    <span
+                                      className={`h-2 w-2 flex-none rounded-full ${
+                                        strategy.status === 'active'
+                                          ? 'bg-emerald-500'
+                                          : 'bg-zinc-400 dark:bg-zinc-600'
+                                      }`}
+                                      aria-hidden="true"
+                                    />
+                                    <span className="truncate">
+                                      {strategy.name}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="px-1 py-2 text-right text-sm font-medium tabular-nums text-zinc-800 dark:text-zinc-200">
+                                  {strategy.netAPR}%
+                                </td>
+                                <td className="px-1 py-2 text-right text-sm tabular-nums">
+                                  {strategy.strategyRewardsAPR}%
+                                </td>
+                                <td className="px-1 py-2 text-right text-sm text-zinc-400 dark:text-zinc-600">
+                                  -
+                                </td>
+                                <td className="px-1 py-2 text-right text-sm text-zinc-400 dark:text-zinc-600">
+                                  -
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td className="px-2 py-2 pl-11 text-sm text-zinc-500 dark:text-zinc-400">
+                                No strategies available for this vault.
+                              </td>
+                              <td className="px-2 py-2" />
+                              <td className="px-2 py-2" />
+                              <td className="px-2 py-2" />
+                              <td className="px-2 py-2" />
+                            </tr>
+                          )
+                        ) : null}
+                      </React.Fragment>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
 
-            <details className="w-full mt-4">
-              <summary className="cursor-pointer text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200">
-                Show Legacy Fields (for backwards compatibility)
-              </summary>
-              <div className="mt-4 overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr>
-                      <th className="px-4 py-2 border-b border-zinc-300 dark:border-zinc-700 text-sm">
-                        Name
-                      </th>
-                      <th className="px-4 py-2 border-b border-zinc-300 dark:border-zinc-700 text-right text-sm">
-                        Legacy Katana Rewards APR (%)
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {vaults.map((vault) => (
-                      <tr key={vault.key}>
-                        <td className="px-4 py-2 border-b border-zinc-200 dark:border-zinc-800 text-sm">
-                          {vault.name}
-                        </td>
-                        <td className="px-4 py-2 border-b border-zinc-200 dark:border-zinc-800 text-right text-sm">
-                          {vault.katanaRewardsAPR}%
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </details>
           </>
         )}
       </section>

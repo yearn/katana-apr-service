@@ -22,10 +22,14 @@ export const config = {
   rpcUrl: process.env.RPC_URL_KATANA!,
   yearnApiUrl: process.env.YDAEMON_BASE_URI || 'https://ydaemon.yearn.fi',
   merklApiUrl: process.env.MERKL_BASE_URI || 'https://api.merkl.xyz',
+  coingeckoApiUrl:
+    process.env.COINGECKO_BASE_URI || 'https://api.coingecko.com/api/v3',
+  coingeckoApiKey: process.env.COINGECKO_API_KEY,
+  coingeckoKatanaCoinId:
+    process.env.COINGECKO_KATANA_COIN_ID || 'katana-network-token',
   aprDebugEnabled: parseBoolean(process.env.APR_DEBUG_ENABLED),
   aprDebugVaultAddress: process.env.APR_DEBUG_VAULT_ADDRESS?.toLowerCase(),
   aprDebugSampleLimit: parsePositiveInteger(process.env.APR_DEBUG_SAMPLE_LIMIT),
-  katanaTokenFDV: 1_000_000_000, // 1B FDV default
   multicallAddress: '0xcA11bde05977b3631167028862bE2a173976CA11' as const,
 }
 

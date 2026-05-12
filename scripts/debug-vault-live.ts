@@ -1,19 +1,30 @@
-import axios from 'axios'
 import dotenv from 'dotenv'
 import { isAddress } from 'viem'
 import { isExcludedCampaignId } from '../src/app/services/externalApis/merklBlacklist'
+import { KATANA_REWARD_TOKEN_ADDRESSES } from '../src/app/services/katanaRewardTokens'
 
 dotenv.config()
 
 const CHAIN_ID = Number.parseInt(process.env.KATANA_CHAIN_ID ?? '747474', 10)
 const YEARN_API_URL = process.env.YDAEMON_BASE_URI || 'https://ydaemon.yearn.fi'
+const DEFAULT_MERKL_API_URL = 'https://api.merkl.xyz'
 const MERKL_API_URL = process.env.MERKL_BASE_URI || 'https://api.merkl.xyz'
+const MERKL_FALLBACK_URLS = [
+  'https://api.merkl.fr',
+  'https://api-merkl.angle.money',
+] as const
+const normalizeApiUrl = (apiUrl: string): string => apiUrl.replace(/\/+$/, '')
+const MERKL_API_URLS = Array.from(
+  new Set(
+    normalizeApiUrl(MERKL_API_URL) === DEFAULT_MERKL_API_URL
+      ? [normalizeApiUrl(MERKL_API_URL), ...MERKL_FALLBACK_URLS]
+      : [normalizeApiUrl(MERKL_API_URL)]
+  )
+)
 
-const WRAPPED_KAT_ADDRESSES = [
-  '0x6E9C1F88a960fE63387eb4b71BC525a9313d8461',
-  '0x3ba1fbC4c3aEA775d335b31fb53778f46FD3a330',
-  '0x0161A31702d6CF715aaa912d64c6A190FD0093aa',
-].map((address) => address.toLowerCase())
+const WRAPPED_KAT_ADDRESSES = KATANA_REWARD_TOKEN_ADDRESSES.map((address) =>
+  address.toLowerCase(),
+)
 
 type ClassificationReason =
   | 'NO_OPPORTUNITY'
@@ -259,11 +270,13 @@ const fetchYearnVaults = async (): Promise<YearnVault[]> => {
     limit: '2500',
   })
 
-  const response = await axios.get<YearnVault[]>(
-    `${YEARN_API_URL}/vaults/katana?${params}`
-  )
+  const response = await fetch(`${YEARN_API_URL}/vaults/katana?${params}`)
 
-  return response.data || []
+  if (!response.ok) {
+    throw new Error(`HTTP error fetching Yearn vaults: ${response.status}`)
+  }
+
+  return ((await response.json()) as YearnVault[]) || []
 }
 
 const applyCampaignBlacklist = (
@@ -288,23 +301,72 @@ const applyCampaignBlacklist = (
     }
   })
 
+const normalizeMerklOpportunities = (
+  responseData: MerklOpportunity[] | { opportunities: MerklOpportunity[] }
+): MerklOpportunity[] =>
+  Array.isArray(responseData) ? responseData : responseData.opportunities || []
+
+const describeRequestError = (error: unknown): string => {
+  if (!(error instanceof Error)) {
+    return String(error)
+  }
+
+  const fetchLikeError = error as Error & {
+    status?: number
+  }
+
+  const details = [
+    fetchLikeError.status
+      ? `status ${fetchLikeError.status}`
+      : undefined,
+  ].filter((value): value is string => !!value)
+
+  return details.length > 0
+    ? `${error.message} (${details.join(', ')})`
+    : error.message
+}
+
 const fetchMerklOpportunities = async (): Promise<MerklOpportunity[]> => {
-  const response = await axios.get<
-    MerklOpportunity[] | { opportunities: MerklOpportunity[] }
-  >(`${MERKL_API_URL}/v4/opportunities`, {
-    params: {
-      status: 'LIVE',
-      chainId: CHAIN_ID,
-      type: 'ERC20LOGPROCESSOR',
-      campaigns: true,
-    },
+  const searchParams = new URLSearchParams({
+    status: 'LIVE',
+    chainId: String(CHAIN_ID),
+    type: 'ERC20LOGPROCESSOR',
+    campaigns: 'true',
   })
+  let lastError: unknown
 
-  const opportunities = Array.isArray(response.data)
-    ? response.data
-    : response.data.opportunities || []
+  for (let index = 0; index < MERKL_API_URLS.length; index += 1) {
+    const apiUrl = MERKL_API_URLS[index]
 
-  return applyCampaignBlacklist(opportunities)
+    try {
+      const response = await fetch(
+        `${apiUrl}/v4/opportunities?${searchParams}`,
+      )
+
+      if (!response.ok) {
+        const httpError = Object.assign(
+          new Error(`HTTP error fetching Merkl opportunities`),
+          { status: response.status },
+        )
+        throw httpError
+      }
+
+      const data = (await response.json()) as
+        | MerklOpportunity[]
+        | { opportunities: MerklOpportunity[] }
+      return applyCampaignBlacklist(normalizeMerklOpportunities(data))
+    } catch (error) {
+      lastError = error
+
+      if (index < MERKL_API_URLS.length - 1) {
+        console.warn(
+          `Merkl request failed for ${apiUrl}; trying fallback host: ${describeRequestError(error)}`
+        )
+      }
+    }
+  }
+
+  throw lastError
 }
 
 const buildSummary = (

@@ -1,5 +1,9 @@
 # Repository Guidelines
 
+## Start Here
+
+- `docs/api-integration-guide.md` (primary reference for API flow, Merkl/yDaemon queries, filters, and live examples)
+
 ## Project Structure & Module Organization
 
 Core application code lives in `src/app`, using the Next.js App Router. API handlers sit under `src/app/api`, while shared DTOs and helper types reside in `src/app/types`. Business logic is grouped by concern within `src/app/services` (`aprCalcs`, `pointsCalcs`, `externalApis`, caching utilities), so keep new computations alongside their peers. Configuration helpers stay in `src/app/config`, and example payloads for the marketing surface belong in `src/app/quick-apys`. Static assets (favicons, images) should be added to `public`, not embedded in source files.

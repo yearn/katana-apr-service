@@ -2,6 +2,12 @@
 
 This is a Next.js app that provides APR and points data for Yearn vaults on Katana via API endpoints. It is designed for serverless deployment (e.g., Vercel).
 
+## Start Here
+
+For a full explanation of how this service queries yDaemon and Merkl, how values are filtered, and why vault rewards may resolve to zero, read:
+
+- [`docs/api-integration-guide.md`](./docs/api-integration-guide.md)
+
 ## Getting Started
 
 Start the development server:

@@ -1,4 +1,3 @@
-import axios from 'axios'
 import { config } from '../../config'
 import type { YearnVault } from '../../types'
 import { logVaultAprDebug } from '../aprCalcs/debugLogger'
@@ -26,8 +25,13 @@ export class YearnApiService {
 
       const url: string = `${this.apiUrl}/vaults/katana?${params}`
 
-      const response = await axios.get<YearnVault[]>(url)
-      const vaults: YearnVault[] = response.data || []
+      const response = await fetch(url)
+
+      if (!response.ok) {
+        throw new Error(`HTTP error fetching vaults from yDaemon: ${response.status}`)
+      }
+
+      const vaults: YearnVault[] = (await response.json() as YearnVault[]) || []
 
       for (const vault of vaults) {
         logVaultAprDebug({
