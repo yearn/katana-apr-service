@@ -190,7 +190,7 @@ APR units:
 - `strategies[].rewardToken` and `strategies[].underlyingContract` when the strategy pool/token could be resolved
 - `apr.extra.katanaRewardsAPR` (legacy alias)
 - `apr.extra.katanaAppRewardsAPR` from Yearn vault-level rewards
-- `apr.extra.fixedRateKatanaRewards` (legacy fixed-rate schedule scaled by `live KAT price / assumed $0.10 KAT price`)
+- `apr.extra.fixedRateKatanaRewards` (legacy compatibility field; fixed-rate KAT rewards have ended and this is always `0`)
 - `apr.extra.katanaBonusAPY` (`0` post-TGE, kept for compatibility)
 - `apr.extra.katanaNativeYield` (`vault.apr.netAPR`)
 - `apr.extra.steerPointsPerDollar` (from strategy debt-weighted rates)
@@ -342,9 +342,8 @@ From `DataCacheService.generateVaultAPRData()`:
 Notes:
 
 - `katanaAppRewardsAPR` continues to come from Yearn vault-level Merkl APR breakdowns.
-- `fixedRateKatanaRewards` uses the legacy fixed-rate table as the APR basis at an assumed `KAT = $0.10 USD`, then scales by `livePrice / 0.10`.
+- `fixedRateKatanaRewards` is kept as a legacy compatibility field, but fixed-rate KAT rewards have ended and the service now returns `0`.
 - `katanaBonusAPY` remains `0`.
-- The example `fixedRateKatanaRewards` values below assume `KAT = $0.10 USD`, which matches the historical fixed-rate program basis.
 
 ```json
 [
@@ -353,7 +352,7 @@ Notes:
     "symbol": "yvvbUSDC",
     "name": "USDC yVault",
     "katanaAppRewardsAPR": 0.005709245156139802,
-    "fixedRateKatanaRewards": 0.35,
+    "fixedRateKatanaRewards": 0,
     "katanaBonusAPY": 0,
     "katanaNativeYield": 0.03392437419763983,
     "steerPointsPerDollar": 0.1711
@@ -363,7 +362,7 @@ Notes:
     "symbol": "AUSD",
     "name": "AUSD yVault",
     "katanaAppRewardsAPR": 0,
-    "fixedRateKatanaRewards": 0.35,
+    "fixedRateKatanaRewards": 0,
     "katanaBonusAPY": 0,
     "katanaNativeYield": 0.11184248250750017,
     "steerPointsPerDollar": 0.1294
@@ -373,7 +372,7 @@ Notes:
     "symbol": "yvvbWBTC",
     "name": "WBTC yVault",
     "katanaAppRewardsAPR": 0,
-    "fixedRateKatanaRewards": 0.07,
+    "fixedRateKatanaRewards": 0,
     "katanaBonusAPY": 0,
     "katanaNativeYield": 0.0006326777539145123,
     "steerPointsPerDollar": 0

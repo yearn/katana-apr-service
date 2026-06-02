@@ -2,13 +2,11 @@ import _ from 'lodash'
 import { config } from '../config/index'
 import type { YearnVault } from '../types/index'
 import { YearnApiService } from './externalApis/yearnApi'
-import { KatanaPriceService } from './externalApis/katanaPriceService'
 import { MorphoAprCalculator } from './aprCalcs/morphoAprCalculator'
 import { SushiAprCalculator } from './aprCalcs/sushiAprCalculator'
 import { YearnAprCalculator } from './aprCalcs/yearnAprCalculator'
 import { SteerPointsCalculator } from './pointsCalcs/steerPointsCalculator'
 import { logVaultAprDebug } from './aprCalcs/debugLogger'
-import { CANONICAL_KAT_ADDRESS } from './katanaRewardTokens'
 import {
   type RewardCalculatorResult,
   TokenBreakdown,
@@ -35,30 +33,8 @@ interface StrategyRewardSummary {
   underlyingContract?: string
 }
 
-const ASSUMED_KAT_PRICE_USD = 0.1
-
-const FIXED_RATE_APR_AT_ASSUMED_KAT_PRICE: Record<
-  | 'yvvbETH'
-  | 'yvvbUSDC'
-  | 'yvvbUSDT'
-  | 'AUSD'
-  | 'yvvbWBTC'
-  | 'yvvbUSDS'
-  | 'yvwstETH',
-  number
-> = {
-  yvvbETH: 0.14,
-  yvvbUSDC: 0.35,
-  yvvbUSDT: 0.35,
-  AUSD: 0.35,
-  yvvbWBTC: 0.07,
-  yvvbUSDS: 0.0,
-  yvwstETH: 0.0,
-}
-
 export class DataCacheService {
   private yearnApi: YearnApiService
-  private katanaPriceService: KatanaPriceService
   private yearnAprCalculator: YearnAprCalculator
   private morphoAprCalculator: MorphoAprCalculator
   private sushiAprCalculator: SushiAprCalculator
@@ -66,7 +42,6 @@ export class DataCacheService {
 
   constructor() {
     this.yearnApi = new YearnApiService()
-    this.katanaPriceService = new KatanaPriceService()
     this.yearnAprCalculator = new YearnAprCalculator()
     this.morphoAprCalculator = new MorphoAprCalculator()
     this.sushiAprCalculator = new SushiAprCalculator()
@@ -91,17 +66,10 @@ export class DataCacheService {
       yearnAPRs,
       morphoAPRs,
       sushiAPRs,
-      katanaTokenPriceUsd,
-      // fixedRateAPRs
     ] = await Promise.all([
       this.yearnAprCalculator.calculateVaultAPRs(vaults),
       this.morphoAprCalculator.calculateVaultAPRs(vaults),
       this.sushiAprCalculator.calculateVaultAPRs(vaults),
-      this.katanaPriceService.getTokenPriceUsd(
-        config.katanaChainId,
-        CANONICAL_KAT_ADDRESS,
-      ),
-      // this.yearnAprCalculator.calculateFixedRateVaultAPRs(vaults),
     ])
 
     // Aggregate results for each vault
@@ -112,7 +80,6 @@ export class DataCacheService {
             yearnAPRs[vault.address],
             morphoAPRs[vault.address],
             sushiAPRs[vault.address],
-            // fixedRateAPRs[vault.address],
           ])
             .flattenDeep()
             .compact()
@@ -148,7 +115,7 @@ export class DataCacheService {
 
           return [
             vault.address,
-            this.aggregateVaultResults(vault, allResults, katanaTokenPriceUsd),
+            this.aggregateVaultResults(vault, allResults),
           ]
         } catch (error) {
           console.error(`Error processing vault ${vault.address}:`, error)
@@ -191,7 +158,6 @@ export class DataCacheService {
   private aggregateVaultResults(
     vault: YearnVault,
     results: VaultRewardCalculatorResult[],
-    katanaTokenPriceUsd: number,
   ): YearnVault {
     const strategyResults = results.filter(
       (result): result is RewardCalculatorResult => 'strategyAddress' in result,
@@ -236,14 +202,6 @@ export class DataCacheService {
       0,
     )
 
-    const fixedRateBaseApr =
-      FIXED_RATE_APR_AT_ASSUMED_KAT_PRICE[
-        vault.symbol as keyof typeof FIXED_RATE_APR_AT_ASSUMED_KAT_PRICE
-      ] || 0
-
-    const fixedRateFromHardcoded =
-      fixedRateBaseApr * (katanaTokenPriceUsd / ASSUMED_KAT_PRICE_USD)
-
     const vaultKatanaBonusAPY = 0
 
     const katanaNativeYield = vault.apr?.netAPR || 0
@@ -254,7 +212,7 @@ export class DataCacheService {
         ...(vault.apr?.extra || {}),
         katanaRewardsAPR: yearnVaultRewards || 0, // legacy field
         katanaAppRewardsAPR: yearnVaultRewards || 0,
-        fixedRateKatanaRewards: fixedRateFromHardcoded || 0,
+        fixedRateKatanaRewards: 0,
         katanaBonusAPY: vaultKatanaBonusAPY,
         katanaNativeYield,
         steerPointsPerDollar:
