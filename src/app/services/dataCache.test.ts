@@ -3,7 +3,6 @@ import type { YearnVault } from '../types'
 
 const mocks = vi.hoisted(() => ({
   mockGetVaults: vi.fn(),
-  mockGetTokenPriceUsd: vi.fn(),
   mockCalculateYearnVaultAPRs: vi.fn(),
   mockCalculateMorphoVaultAPRs: vi.fn(),
   mockCalculateSushiVaultAPRs: vi.fn(),
@@ -14,12 +13,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock('./externalApis/yearnApi', () => ({
   YearnApiService: vi.fn().mockImplementation(() => ({
     getVaults: mocks.mockGetVaults,
-  })),
-}))
-
-vi.mock('./externalApis/katanaPriceService', () => ({
-  KatanaPriceService: vi.fn().mockImplementation(() => ({
-    getTokenPriceUsd: mocks.mockGetTokenPriceUsd,
   })),
 }))
 
@@ -70,13 +63,11 @@ const makeVault = (overrides: Partial<YearnVault> = {}): YearnVault => ({
 describe('DataCacheService.generateVaultAPRData', () => {
   beforeEach(() => {
     mocks.mockGetVaults.mockReset()
-    mocks.mockGetTokenPriceUsd.mockReset()
     mocks.mockCalculateYearnVaultAPRs.mockReset()
     mocks.mockCalculateMorphoVaultAPRs.mockReset()
     mocks.mockCalculateSushiVaultAPRs.mockReset()
     mocks.mockCalculateSteerPoints.mockReset()
     mocks.logVaultAprDebug.mockReset()
-    mocks.mockGetTokenPriceUsd.mockResolvedValue(1)
     mocks.mockCalculateYearnVaultAPRs.mockResolvedValue({})
     mocks.mockCalculateMorphoVaultAPRs.mockResolvedValue({})
     mocks.mockCalculateSushiVaultAPRs.mockResolvedValue({})
@@ -232,12 +223,11 @@ describe('DataCacheService.generateVaultAPRData', () => {
     )
   })
 
-  it('scales fixed rate rewards by the live-to-assumed KAT price ratio', async () => {
+  it('does not apply ended fixed-rate KAT rewards', async () => {
     const vault = makeVault({
       symbol: 'yvvbUSDC',
     })
     mocks.mockGetVaults.mockResolvedValue([vault])
-    mocks.mockGetTokenPriceUsd.mockResolvedValue(0.5)
     mocks.mockCalculateYearnVaultAPRs.mockResolvedValue({
       [vault.address]: [
         {
@@ -260,7 +250,7 @@ describe('DataCacheService.generateVaultAPRData', () => {
     const service = new DataCacheService()
     const data = await service.generateVaultAPRData()
 
-    expect(data[vault.address].apr?.extra?.fixedRateKatanaRewards).toBe(1.75)
+    expect(data[vault.address].apr?.extra?.fixedRateKatanaRewards).toBe(0)
   })
 
   it('keeps zero-result strategy entries when a strategy mapping or opportunity is missing', async () => {

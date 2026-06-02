@@ -18,7 +18,6 @@ type VaultDisplay = {
   name: string
   monthlyNetAPY: string
   katanaAppRewardsAPR: string
-  fixedRateKatanaRewards: string
   totalAPR: string
   strategies: StrategyDisplay[]
 }
@@ -75,17 +74,13 @@ export default function QuickAPYs(): React.ReactElement {
         const displayVaults: VaultDisplay[] = vaultsArr.map((vault) => {
           const monthlyNetAPY = vault.apr?.netAPR || 0
           const katanaAppRewardsAPR = vault.apr?.extra?.katanaAppRewardsAPR || 0
-          const fixedRateKatanaRewards =
-            vault.apr?.extra?.fixedRateKatanaRewards || 0
-          const totalAPR =
-            monthlyNetAPY + katanaAppRewardsAPR + fixedRateKatanaRewards
+          const totalAPR = monthlyNetAPY + katanaAppRewardsAPR
 
           return {
             key: vault.address,
             name: vault.name,
             monthlyNetAPY: formatPercent(monthlyNetAPY),
             katanaAppRewardsAPR: formatPercent(katanaAppRewardsAPR),
-            fixedRateKatanaRewards: formatPercent(fixedRateKatanaRewards),
             totalAPR: formatPercent(totalAPR),
             strategies: (vault.strategies || []).map((strategy) => ({
               key: strategy.address,
@@ -135,13 +130,12 @@ export default function QuickAPYs(): React.ReactElement {
         ) : (
           <>
             <div className="w-full overflow-x-auto">
-              <table className="min-w-[980px] w-full table-fixed border-collapse text-left">
+              <table className="min-w-[860px] w-full table-fixed border-collapse text-left">
                 <colgroup>
-                  <col className="w-[40%]" />
-                  <col className="w-[15%]" />
-                  <col className="w-[15%]" />
-                  <col className="w-[15%]" />
-                  <col className="w-[15%]" />
+                  <col className="w-[46%]" />
+                  <col className="w-[18%]" />
+                  <col className="w-[18%]" />
+                  <col className="w-[18%]" />
                 </colgroup>
                 <thead>
                   <tr>
@@ -153,9 +147,6 @@ export default function QuickAPYs(): React.ReactElement {
                     </th>
                     <th className="whitespace-nowrap px-1 py-2 text-right text-sm text-zinc-500 dark:text-zinc-400">
                       KAT Strategy APR (%)
-                    </th>
-                    <th className="whitespace-nowrap px-1 py-2 text-right text-sm text-zinc-500 dark:text-zinc-400">
-                      KAT Vault Bonus APR (%)
                     </th>
                     <th className="whitespace-nowrap px-1 py-2 text-right text-sm font-bold text-zinc-500 dark:text-zinc-400">
                       Total APR (%)
@@ -195,9 +186,6 @@ export default function QuickAPYs(): React.ReactElement {
                           <td className="px-1 py-3 text-right text-sm tabular-nums">
                             {vault.katanaAppRewardsAPR}%
                           </td>
-                          <td className="px-1 py-3 text-right text-sm tabular-nums">
-                            {vault.fixedRateKatanaRewards}%
-                          </td>
                           <td className="px-1 py-3 text-right text-sm font-bold tabular-nums">
                             {vault.totalAPR}%
                           </td>
@@ -233,9 +221,6 @@ export default function QuickAPYs(): React.ReactElement {
                                 <td className="px-1 py-2 text-right text-sm text-zinc-400 dark:text-zinc-600">
                                   -
                                 </td>
-                                <td className="px-1 py-2 text-right text-sm text-zinc-400 dark:text-zinc-600">
-                                  -
-                                </td>
                               </tr>
                             ))
                           ) : (
@@ -243,7 +228,6 @@ export default function QuickAPYs(): React.ReactElement {
                               <td className="px-2 py-2 pl-11 text-sm text-zinc-500 dark:text-zinc-400">
                                 No strategies available for this vault.
                               </td>
-                              <td className="px-2 py-2" />
                               <td className="px-2 py-2" />
                               <td className="px-2 py-2" />
                               <td className="px-2 py-2" />
