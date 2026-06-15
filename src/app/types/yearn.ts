@@ -18,14 +18,16 @@ export interface YearnStrategy {
   address: string
   name: string
   status?: string
-  netAPR?: number
-  strategyRewardsAPR?: number
-  rewardToken?: YearnRewardToken
-  underlyingContract?: string
+  netAPR?: number | null
+  strategyRewardsAPR?: number | null
+  rewardToken?: YearnRewardToken | null
+  underlyingContract?: string | null
   details?: YearnStrategyDetails
 }
 
 export interface YearnVaultExtra {
+  stakingRewardsAPR?: number | null
+  gammaRewardAPR?: number | null
   katanaRewardsAPR?: number // legacy field
   katanaAppRewardsAPR?: number
   fixedRateKatanaRewards?: number
@@ -59,6 +61,18 @@ export interface YearnVaultAPY {
   points?: YearnVaultPoints
   pricePerShare?: YearnVaultPricePerShare
   extra?: YearnVaultExtra
+  forwardAPR?: {
+    type: string
+    netAPR: number | null
+    composite: {
+      boost: number | null
+      poolAPY: number | null
+      boostedAPR: number | null
+      baseAPR: number | null
+      cvxAPR: number | null
+      rewardsAPR: number | null
+    }
+  }
 }
 
 export interface YearnVaultTVL {

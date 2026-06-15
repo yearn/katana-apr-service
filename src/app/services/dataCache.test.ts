@@ -294,8 +294,8 @@ describe('DataCacheService.generateVaultAPRData', () => {
       address: STRATEGY_ADDRESS,
       strategyRewardsAPR: 0,
     })
-    expect(data[vault.address].strategies[0].rewardToken).toBeUndefined()
-    expect(data[vault.address].strategies[0].underlyingContract).toBeUndefined()
+    expect(data[vault.address].strategies[0].rewardToken).toBeNull()
+    expect(data[vault.address].strategies[0].underlyingContract).toBeNull()
     expect(data[vault.address].apr?.extra?.katanaAppRewardsAPR).toBe(0)
     expect(data[vault.address].apr?.extra?.katanaRewardsAPR).toBe(0)
   })

@@ -57,6 +57,7 @@ describe('YearnApiService', () => {
           name: 'vbUSDC yVault',
           symbol: 'yvvbUSDC',
           totalAssets: '1000000',
+          totalDebt: '100',
           asset: {
             address: '0x00000000000000000000000000000000000000cc',
             name: 'Vault Bridge USDC',
@@ -110,16 +111,22 @@ describe('YearnApiService', () => {
       symbol: 'yvvbUSDC',
       chainID: 747474,
       apr: {
-        netAPR: 0.03,
+        type: 'v3:averaged',
+        netAPR: 0.01,
         fees: {
-          management: 25,
-          performance: 1000,
+          management: 0.0025,
+          performance: 0.1,
+        },
+        pricePerShare: {
+          today: 1,
+          weekAgo: 0.99,
+          monthAgo: 0.98,
         },
       },
       tvl: {
         totalAssets: '1000000',
         tvl: 100,
-        price: 0,
+        price: 100,
       },
     })
     expect(vaults[0].strategies).toEqual([
@@ -127,12 +134,17 @@ describe('YearnApiService', () => {
         address: '0x00000000000000000000000000000000000000dd',
         name: 'Morpho Strategy',
         status: 'active',
+        netAPR: null,
+        strategyRewardsAPR: null,
+        rewardToken: null,
+        underlyingContract: null,
         details: {
           totalDebt: '42',
           totalGain: '2',
           totalLoss: '1',
           lastReport: 123,
           performanceFee: 0,
+          debtRatio: 4200,
         },
       },
     ])

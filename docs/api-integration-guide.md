@@ -190,7 +190,7 @@ APR units:
 - `apr.extra.katanaAppRewardsAPR` from Yearn vault-level rewards
 - `apr.extra.fixedRateKatanaRewards` (legacy compatibility field; fixed-rate KAT rewards have ended and this is always `0`)
 - `apr.extra.katanaBonusAPY` (`0` post-TGE, kept for compatibility)
-- `apr.extra.katanaNativeYield` (`vault.apr.netAPR`)
+- `apr.extra.katanaNativeYield` (`vault.apr.netAPR`, mapped from Kong monthly net APY for yDaemon compatibility)
 - `apr.extra.steerPointsPerDollar` (`0`; legacy field kept after the points program ended)
 
 Weighting notes:

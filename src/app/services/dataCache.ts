@@ -168,18 +168,30 @@ export class DataCacheService {
       const strategyRewards = strategyAddress
         ? strategyRewardsByAddress[strategyAddress]
         : undefined
+      const strategyRewardsAPR = strategyRewards
+        ? strategyRewards.rawApr > 0
+          ? strategyRewards.rawApr
+          : strategy.strategyRewardsAPR ?? strategyRewards.rawApr
+        : strategy.strategyRewardsAPR ?? null
 
       return {
         ...strategy,
         ...(strategyRewards
           ? {
-              strategyRewardsAPR: strategyRewards.rawApr,
+              strategyRewardsAPR,
               rewardToken: strategyRewards.rewardToken
                 ? { ...strategyRewards.rewardToken }
-                : undefined,
-              underlyingContract: strategyRewards.underlyingContract,
+                : strategy.rewardToken ?? null,
+              underlyingContract:
+                strategyRewards.underlyingContract ??
+                strategy.underlyingContract ??
+                null,
             }
-          : {}),
+          : {
+              strategyRewardsAPR: strategy.strategyRewardsAPR ?? null,
+              rewardToken: strategy.rewardToken ?? null,
+              underlyingContract: strategy.underlyingContract ?? null,
+            }),
       }
     })
 
@@ -207,6 +219,8 @@ export class DataCacheService {
       ...vault.apr,
       extra: {
         ...(vault.apr?.extra || {}),
+        stakingRewardsAPR: null,
+        gammaRewardAPR: null,
         katanaRewardsAPR: yearnVaultRewards || 0, // legacy field
         katanaAppRewardsAPR: yearnVaultRewards || 0,
         fixedRateKatanaRewards: 0,

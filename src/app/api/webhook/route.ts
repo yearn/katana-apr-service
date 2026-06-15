@@ -88,7 +88,7 @@ function jsonResponseWithBigInt(data: unknown): Response {
 
 const dataCacheService = new DataCacheService()
 
-function toFiniteNumber(value: number | undefined): number | undefined {
+function toFiniteNumber(value: number | null | undefined): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
