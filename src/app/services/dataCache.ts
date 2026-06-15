@@ -5,7 +5,6 @@ import { YearnApiService } from './externalApis/yearnApi'
 import { MorphoAprCalculator } from './aprCalcs/morphoAprCalculator'
 import { SushiAprCalculator } from './aprCalcs/sushiAprCalculator'
 import { YearnAprCalculator } from './aprCalcs/yearnAprCalculator'
-import { SteerPointsCalculator } from './pointsCalcs/steerPointsCalculator'
 import { logVaultAprDebug } from './aprCalcs/debugLogger'
 import {
   type RewardCalculatorResult,
@@ -38,14 +37,12 @@ export class DataCacheService {
   private yearnAprCalculator: YearnAprCalculator
   private morphoAprCalculator: MorphoAprCalculator
   private sushiAprCalculator: SushiAprCalculator
-  private steerPointsCalculator: SteerPointsCalculator
 
   constructor() {
     this.yearnApi = new YearnApiService()
     this.yearnAprCalculator = new YearnAprCalculator()
     this.morphoAprCalculator = new MorphoAprCalculator()
     this.sushiAprCalculator = new SushiAprCalculator()
-    this.steerPointsCalculator = new SteerPointsCalculator()
   }
 
   async generateVaultAPRData(): Promise<APRDataCache> {
@@ -57,7 +54,7 @@ export class DataCacheService {
 
     if (vaults.length === 0) {
       throw new Error(
-        `No vaults returned from yDaemon (chainId=${config.katanaChainId})`,
+        `No vaults returned from Kong (chainId=${config.katanaChainId})`,
       )
     }
 
@@ -215,8 +212,7 @@ export class DataCacheService {
         fixedRateKatanaRewards: 0,
         katanaBonusAPY: vaultKatanaBonusAPY,
         katanaNativeYield,
-        steerPointsPerDollar:
-          this.steerPointsCalculator.calculateForVault(vault),
+        steerPointsPerDollar: 0,
       },
     }
 

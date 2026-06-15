@@ -20,7 +20,8 @@ export const config = {
   katanaChainId: 747474,
   // biome-ignore lint/style/noNonNullAssertion: temp
   rpcUrl: process.env.RPC_URL_KATANA!,
-  yearnApiUrl: process.env.YDAEMON_BASE_URI || 'https://ydaemon.yearn.fi',
+  kongApiUrl: process.env.KONG_BASE_URI || 'https://kong.yearn.fi/api/rest',
+  yDaemonApiUrl: process.env.YDAEMON_BASE_URI || 'https://ydaemon.yearn.fi',
   merklApiUrl: process.env.MERKL_BASE_URI || 'https://api.merkl.xyz',
   coingeckoApiUrl:
     process.env.COINGECKO_BASE_URI || 'https://api.coingecko.com/api/v3',

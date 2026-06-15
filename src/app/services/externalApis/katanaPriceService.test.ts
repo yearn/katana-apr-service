@@ -48,7 +48,7 @@ describe('KatanaPriceService', () => {
 
     expect(price).toBe(1.25)
     expect(mocks.fetchGet).toHaveBeenCalledWith(
-      `${config.yearnApiUrl}/prices/all`,
+      `${config.yDaemonApiUrl}/prices/all`,
     )
   })
 
@@ -72,7 +72,11 @@ describe('KatanaPriceService', () => {
     expect(mocks.fetchGet).toHaveBeenNthCalledWith(
       2,
       expect.stringContaining(`${config.coingeckoApiUrl}/simple/price`),
-      expect.objectContaining({ headers: undefined }),
+      expect.objectContaining({
+        headers: config.coingeckoApiKey
+          ? { 'x-cg-demo-api-key': config.coingeckoApiKey }
+          : undefined,
+      }),
     )
     expect(mocks.fetchGet).toHaveBeenNthCalledWith(
       2,
@@ -98,7 +102,7 @@ describe('KatanaPriceService', () => {
 
     expect(price).toBe(2.5)
     expect(mocks.fetchGet).toHaveBeenCalledWith(
-      `${config.yearnApiUrl}/prices/all`,
+      `${config.yDaemonApiUrl}/prices/all`,
     )
   })
 
@@ -119,7 +123,7 @@ describe('KatanaPriceService', () => {
 
     expect(price).toBe(2.5)
     expect(mocks.fetchGet).toHaveBeenCalledWith(
-      `${config.yearnApiUrl}/prices/all`,
+      `${config.yDaemonApiUrl}/prices/all`,
     )
   })
 

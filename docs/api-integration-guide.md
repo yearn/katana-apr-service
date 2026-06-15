@@ -8,7 +8,7 @@ If you are debugging rewards, adding new vault types, or validating Merkl behavi
 
 At request time, the service:
 
-1. Fetches Katana vaults from yDaemon.
+1. Fetches Katana vaults from Kong.
 2. Fetches live `ERC20LOGPROCESSOR` opportunities from Merkl (with campaigns).
 3. Filters Merkl campaigns with a local blacklist.
 4. Matches each vault to a Merkl opportunity.
@@ -36,35 +36,33 @@ At request time, the service:
   - `src/app/services/aprCalcs/utils.ts`
 - Shared reward-token allowlist:
   - `src/app/services/katanaRewardTokens.ts`
-- Points logic:
+- Legacy points logic:
   - `src/app/services/pointsCalcs/steerPointsCalculator.ts`
 
 ## External APIs Queried
 
-### yDaemon (vault universe)
+### Kong (vault universe)
 
 Base URL (default):
 
-- `https://ydaemon.yearn.fi`
+- `https://kong.yearn.fi/api/rest`
 
-Endpoint used by this repo:
+Endpoints used by this repo:
 
-- `GET /vaults/katana`
+- `GET /list/vaults/747474?origin=yearn`
+- `GET /snapshot/747474/:address`
 
-Query params used:
+Filtering and mapping:
 
-- `hideAlways=true`
-- `orderBy=featuringScore`
-- `orderDirection=desc`
-- `strategiesDetails=withDetails`
-- `strategiesCondition=inQueue`
-- `chainIDs=747474`
-- `limit=2500`
+- Keeps list entries where `origin === "yearn"` and `inclusion.isKatana === true`.
+- Hydrates each kept vault through the snapshot endpoint.
+- Maps snapshot `composition[]` into the existing `strategies[]` shape used by APR and points calculators.
 
 Example:
 
 ```bash
-curl -sS 'https://ydaemon.yearn.fi/vaults/katana?hideAlways=true&orderBy=featuringScore&orderDirection=desc&strategiesDetails=withDetails&strategiesCondition=inQueue&chainIDs=747474&limit=2500'
+curl -sS 'https://kong.yearn.fi/api/rest/list/vaults/747474?origin=yearn'
+curl -sS 'https://kong.yearn.fi/api/rest/snapshot/747474/0x80c34BD3A3569E126e7055831036aa7b212cB159'
 ```
 
 ### Merkl (opportunities and campaigns)
@@ -134,7 +132,7 @@ Notes:
 
 ### 1) Vault fetch
 
-`YearnApiService.getVaults()` fetches the Katana vault list from yDaemon.
+`YearnApiService.getVaults()` fetches the Katana vault list from Kong and hydrates each vault through Kong snapshots.
 
 ### 2) Merkl fetch
 
@@ -193,7 +191,7 @@ APR units:
 - `apr.extra.fixedRateKatanaRewards` (legacy compatibility field; fixed-rate KAT rewards have ended and this is always `0`)
 - `apr.extra.katanaBonusAPY` (`0` post-TGE, kept for compatibility)
 - `apr.extra.katanaNativeYield` (`vault.apr.netAPR`)
-- `apr.extra.steerPointsPerDollar` (from strategy debt-weighted rates)
+- `apr.extra.steerPointsPerDollar` (`0`; legacy field kept after the points program ended)
 
 Weighting notes:
 
@@ -232,12 +230,12 @@ Related doc:
 
 These were sampled from live upstream APIs on **March 9, 2026 (America/New_York)** and can change over time.
 
-### 1) yDaemon vault sample (USDC yVault)
+### 1) Kong vault snapshot sample (USDC yVault)
 
 Query:
 
 ```bash
-curl -sS 'https://ydaemon.yearn.fi/vaults/katana?hideAlways=true&orderBy=featuringScore&orderDirection=desc&strategiesDetails=withDetails&strategiesCondition=inQueue&chainIDs=747474&limit=2500'
+curl -sS 'https://kong.yearn.fi/api/rest/snapshot/747474/0x80c34BD3A3569E126e7055831036aa7b212cB159'
 ```
 
 Snippet:
@@ -344,6 +342,7 @@ Notes:
 - `katanaAppRewardsAPR` continues to come from Yearn vault-level Merkl APR breakdowns.
 - `fixedRateKatanaRewards` is kept as a legacy compatibility field, but fixed-rate KAT rewards have ended and the service now returns `0`.
 - `katanaBonusAPY` remains `0`.
+- `steerPointsPerDollar` is kept as a legacy compatibility field, but the Steer points program has ended and the service now returns `0`.
 
 ```json
 [
@@ -355,7 +354,7 @@ Notes:
     "fixedRateKatanaRewards": 0,
     "katanaBonusAPY": 0,
     "katanaNativeYield": 0.03392437419763983,
-    "steerPointsPerDollar": 0.1711
+    "steerPointsPerDollar": 0
   },
   {
     "address": "0x93Fec6639717b6215A48E5a72a162C50DCC40d68",
@@ -365,7 +364,7 @@ Notes:
     "fixedRateKatanaRewards": 0,
     "katanaBonusAPY": 0,
     "katanaNativeYield": 0.11184248250750017,
-    "steerPointsPerDollar": 0.1294
+    "steerPointsPerDollar": 0
   },
   {
     "address": "0xAa0362eCC584B985056E47812931270b99C91f9d",
@@ -399,7 +398,7 @@ Notes:
   - `fixedRateKatanaRewards`
   - `katanaBonusAPY`
   - `katanaNativeYield`
-  - `steerPointsPerDollar`
+  - `steerPointsPerDollar` (legacy, always `0`)
 - Also emits strategy-addressed `katRewardsAPR` rows for strategies where `strategyRewardsAPR` is present, reusing the incoming estimated-APR label so Kong can hydrate them onto vault composition entries.
 
 ### `GET /api/health`
@@ -414,7 +413,7 @@ Notes:
 
 When a vault looks wrong:
 
-1. Confirm vault exists in yDaemon query output.
+1. Confirm vault exists in Kong list output and its snapshot endpoint returns strategy composition.
 2. Query Merkl by `identifier=<vaultAddress>`.
 3. Check `aprRecord.breakdowns[].identifier`.
 4. Verify matching `campaigns[].campaignId` still exists after blacklist.
