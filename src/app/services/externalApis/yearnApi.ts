@@ -8,6 +8,7 @@ import type {
   YearnVaultTVL,
 } from '../../types'
 import { logVaultAprDebug } from '../aprCalcs/debugLogger'
+import { CANONICAL_KAT_ADDRESS } from '../katanaRewardTokens'
 
 type KongVaultListItem = {
   address: string
@@ -21,17 +22,25 @@ type KongVaultCompositionItem = {
   name?: string
   status?: string
   currentDebt?: string
+  maxDebt?: string
   totalDebt?: string
   totalGain?: string
   totalLoss?: string
   lastReport?: string | number
   performanceFee?: string | number
+  latestReportApr?: number | null
+  performance?: {
+    estimated?: {
+      components?: Record<string, number | string | null>
+    }
+  }
 }
 
 type KongVaultAsset = {
   address?: string
   name?: string
   symbol?: string
+  description?: string
   decimals?: string | number
 }
 
@@ -40,7 +49,9 @@ type KongVaultSnapshot = {
   symbol?: string
   name?: string
   chainId?: number
+  decimals?: string | number
   totalAssets?: string
+  totalDebt?: string
   tvl?: { close?: number } | number
   asset?: KongVaultAsset | null
   meta?: {
@@ -92,8 +103,67 @@ const toNumber = (value: unknown): number => {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
+const toFiniteNumberOrNull = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === '') {
+    return null
+  }
+
+  const parsed = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 const toStringValue = (value: unknown, fallback = '0'): string =>
   value === null || value === undefined ? fallback : String(value)
+
+const normalizeBasisPoints = (value: unknown): number => toNumber(value) / 10_000
+
+const normalizeShareValue = (
+  value: unknown,
+  decimals: number,
+): number => {
+  if (value === null || value === undefined) {
+    return 0
+  }
+
+  try {
+    return Number(BigInt(String(value))) / 10 ** decimals
+  } catch {
+    return toNumber(value)
+  }
+}
+
+const calculateDebtRatio = (
+  strategyDebt: unknown,
+  vaultDebt: unknown,
+): number | undefined => {
+  try {
+    const debt = BigInt(String(strategyDebt ?? '0'))
+    const totalDebt = BigInt(String(vaultDebt ?? '0'))
+    if (debt <= BigInt(0) || totalDebt <= BigInt(0)) {
+      return undefined
+    }
+
+    return Number(
+      (debt * BigInt(10_000) + totalDebt / BigInt(2)) / totalDebt,
+    )
+  } catch {
+    return undefined
+  }
+}
+
+const calculateTokenPrice = (
+  totalAssets: unknown,
+  tvl: number,
+  decimals: number,
+): number => {
+  const normalizedAssets = normalizeShareValue(totalAssets, decimals)
+  return normalizedAssets > 0 ? tvl / normalizedAssets : 0
+}
+
+const toPositiveFiniteNumberOrNull = (value: unknown): number | null => {
+  const parsed = toFiniteNumberOrNull(value)
+  return parsed && parsed > 0 ? parsed : null
+}
 
 const isKatanaYearnVault = (vault: KongVaultListItem): boolean =>
   vault.origin === 'yearn' && vault.inclusion?.isKatana === true
@@ -110,28 +180,49 @@ const mapKongAssetToYearnToken = (
     name: asset.name,
     symbol: asset.symbol,
     decimals: toNumber(asset.decimals),
+    description: asset.description || '',
   }
 }
 
 const mapKongCompositionToYearnStrategy = (
   strategy: KongVaultCompositionItem,
+  snapshot: KongVaultSnapshot,
 ): YearnStrategy | null => {
   if (!strategy.address) {
     return null
   }
 
+  const totalDebt = toStringValue(strategy.currentDebt ?? strategy.totalDebt)
+  const estimatedKatRewardsAPR = toFiniteNumberOrNull(
+    strategy.performance?.estimated?.components?.katRewardsAPR,
+  )
   const details: YearnStrategyDetails = {
-    totalDebt: toStringValue(strategy.currentDebt ?? strategy.totalDebt),
+    totalDebt,
     totalGain: toStringValue(strategy.totalGain),
     totalLoss: toStringValue(strategy.totalLoss),
     lastReport: toNumber(strategy.lastReport),
     performanceFee: toNumber(strategy.performanceFee),
   }
+  const debtRatio = calculateDebtRatio(totalDebt, snapshot.totalDebt)
+  if (debtRatio !== undefined) {
+    details.debtRatio = debtRatio
+  }
 
   return {
     address: strategy.address,
     name: strategy.name || 'Unknown',
-    status: strategy.status,
+    status: totalDebt === '0' ? 'unallocated' : strategy.status,
+    netAPR: toPositiveFiniteNumberOrNull(strategy.latestReportApr),
+    strategyRewardsAPR: estimatedKatRewardsAPR,
+    rewardToken:
+      estimatedKatRewardsAPR !== null && estimatedKatRewardsAPR > 0
+        ? {
+            address: CANONICAL_KAT_ADDRESS,
+            symbol: 'KAT',
+            decimals: 18,
+          }
+        : null,
+    underlyingContract: null,
     details,
   }
 }
@@ -139,17 +230,21 @@ const mapKongCompositionToYearnStrategy = (
 const mapKongAprToYearnApr = (snapshot: KongVaultSnapshot): YearnVaultAPY => {
   const historical = snapshot.performance?.historical
   const apy = snapshot.apy
+  const shareDecimals = toNumber(snapshot.decimals ?? snapshot.asset?.decimals)
 
   return {
+    type: 'v3:averaged',
     netAPR:
+      apy?.monthlyNet ??
+      historical?.monthlyNet ??
       apy?.net ??
       historical?.net ??
       snapshot.performance?.oracle?.netAPR ??
       0,
     fees: snapshot.fees
       ? {
-          management: toNumber(snapshot.fees.managementFee),
-          performance: toNumber(snapshot.fees.performanceFee),
+          management: normalizeBasisPoints(snapshot.fees.managementFee),
+          performance: normalizeBasisPoints(snapshot.fees.performanceFee),
         }
       : undefined,
     points: {
@@ -158,20 +253,46 @@ const mapKongAprToYearnApr = (snapshot: KongVaultSnapshot): YearnVaultAPY => {
       inception: toNumber(apy?.inceptionNet ?? historical?.inceptionNet),
     },
     pricePerShare: {
-      today: toNumber(apy?.pricePerShare),
-      weekAgo: toNumber(apy?.weeklyPricePerShare),
-      monthAgo: toNumber(apy?.monthlyPricePerShare),
+      today: normalizeShareValue(apy?.pricePerShare, shareDecimals),
+      weekAgo: normalizeShareValue(
+        apy?.weeklyPricePerShare,
+        shareDecimals,
+      ),
+      monthAgo: normalizeShareValue(
+        apy?.monthlyPricePerShare,
+        shareDecimals,
+      ),
+    },
+    forwardAPR: {
+      type: '',
+      netAPR: null,
+      composite: {
+        boost: null,
+        poolAPY: null,
+        boostedAPR: null,
+        baseAPR: null,
+        cvxAPR: null,
+        rewardsAPR: null,
+      },
     },
   }
 }
 
-const mapKongTvlToYearnTvl = (snapshot: KongVaultSnapshot): YearnVaultTVL => ({
-  totalAssets: toStringValue(snapshot.totalAssets),
-  tvl: typeof snapshot.tvl === 'number'
+const mapKongTvlToYearnTvl = (snapshot: KongVaultSnapshot): YearnVaultTVL => {
+  const tvl = typeof snapshot.tvl === 'number'
     ? snapshot.tvl
-    : toNumber(snapshot.tvl?.close),
-  price: 0,
-})
+    : toNumber(snapshot.tvl?.close)
+
+  return {
+    totalAssets: toStringValue(snapshot.totalAssets),
+    tvl,
+    price: calculateTokenPrice(
+      snapshot.totalAssets,
+      tvl,
+      toNumber(snapshot.asset?.decimals ?? snapshot.decimals),
+    ),
+  }
+}
 
 const mapKongSnapshotToYearnVault = (
   snapshot: KongVaultSnapshot,
@@ -183,7 +304,7 @@ const mapKongSnapshotToYearnVault = (
 
   const token = mapKongAssetToYearnToken(snapshot.asset ?? snapshot.meta?.token)
   const strategies = (snapshot.composition || [])
-    .map(mapKongCompositionToYearnStrategy)
+    .map((strategy) => mapKongCompositionToYearnStrategy(strategy, snapshot))
     .filter((strategy): strategy is YearnStrategy => strategy !== null)
 
   return {
