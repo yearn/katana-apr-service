@@ -67,7 +67,7 @@ export class KatanaPriceService {
   constructor() {
     this.coingeckoApiUrl = config.coingeckoApiUrl
     this.coingeckoKatanaCoinId = config.coingeckoKatanaCoinId
-    this.yearnApiUrl = config.yearnApiUrl
+    this.yearnApiUrl = config.yDaemonApiUrl
     this.coinGeckoHeaders = config.coingeckoApiKey
       ? { 'x-cg-demo-api-key': config.coingeckoApiKey }
       : undefined

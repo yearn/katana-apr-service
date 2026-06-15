@@ -6,7 +6,6 @@ const mocks = vi.hoisted(() => ({
   mockCalculateYearnVaultAPRs: vi.fn(),
   mockCalculateMorphoVaultAPRs: vi.fn(),
   mockCalculateSushiVaultAPRs: vi.fn(),
-  mockCalculateSteerPoints: vi.fn(),
   logVaultAprDebug: vi.fn(),
 }))
 
@@ -31,12 +30,6 @@ vi.mock('./aprCalcs/morphoAprCalculator', () => ({
 vi.mock('./aprCalcs/sushiAprCalculator', () => ({
   SushiAprCalculator: vi.fn().mockImplementation(() => ({
     calculateVaultAPRs: mocks.mockCalculateSushiVaultAPRs,
-  })),
-}))
-
-vi.mock('./pointsCalcs/steerPointsCalculator', () => ({
-  SteerPointsCalculator: vi.fn().mockImplementation(() => ({
-    calculateForVault: mocks.mockCalculateSteerPoints,
   })),
 }))
 
@@ -66,12 +59,10 @@ describe('DataCacheService.generateVaultAPRData', () => {
     mocks.mockCalculateYearnVaultAPRs.mockReset()
     mocks.mockCalculateMorphoVaultAPRs.mockReset()
     mocks.mockCalculateSushiVaultAPRs.mockReset()
-    mocks.mockCalculateSteerPoints.mockReset()
     mocks.logVaultAprDebug.mockReset()
     mocks.mockCalculateYearnVaultAPRs.mockResolvedValue({})
     mocks.mockCalculateMorphoVaultAPRs.mockResolvedValue({})
     mocks.mockCalculateSushiVaultAPRs.mockResolvedValue({})
-    mocks.mockCalculateSteerPoints.mockReturnValue(0)
   })
 
   it('returns fallback payload when all calculator results are empty', async () => {
@@ -198,6 +189,7 @@ describe('DataCacheService.generateVaultAPRData', () => {
     expect(aggregatedVault.apr?.extra?.katanaRewardsAPR).toBeCloseTo(0.1)
     expect(aggregatedVault.apr?.extra?.fixedRateKatanaRewards).toBe(0)
     expect(aggregatedVault.apr?.extra?.katanaBonusAPY).toBe(0)
+    expect(aggregatedVault.apr?.extra?.steerPointsPerDollar).toBe(0)
     expect(aggregatedVault.strategies[0].strategyRewardsAPR).toBe(0.04)
     expect(aggregatedVault.strategies[0].rewardToken).toEqual({
       address: '0x00000000000000000000000000000000000000bb',
