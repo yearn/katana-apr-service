@@ -22,7 +22,7 @@ type VaultDisplay = {
   strategies: StrategyDisplay[]
 }
 
-const formatPercent = (value: number | undefined): string =>
+const formatPercent = (value: number | null | undefined): string =>
   ((value || 0) * 100).toFixed(2)
 
 const parseVaultResponse = (data: unknown): YearnVault[] => {
