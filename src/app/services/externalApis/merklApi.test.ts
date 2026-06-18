@@ -165,6 +165,61 @@ describe('MerklApiService', () => {
     )
   })
 
+  it('combines log processor and mapping opportunities for Yearn vault rewards', async () => {
+    const logProcessorOpportunity = {
+      id: 'logprocessor-opportunity',
+      chainId: 747474,
+      name: 'Deposit vbUSDC in vbUSDC yVault',
+      tvl: 1_000_000,
+      status: 'LIVE',
+      type: 'ERC20LOGPROCESSOR',
+      identifier: '0x80c34BD3A3569E126e7055831036aa7b212cB159',
+      campaigns: [],
+    }
+    const mappingOpportunity = {
+      id: '16662980337666299926',
+      chainId: 747474,
+      name: 'Deposit vbWBTC in vbWBTC yVault',
+      tvl: 1_000_000,
+      status: 'LIVE',
+      type: 'ERC20_MAPPING',
+      identifier: '0xAa0362eCC584B985056E47812931270b99C91f9d',
+      campaigns: [],
+    }
+
+    mocks.fetchGet.mockImplementation((url: string) => {
+      const requestUrl = new URL(url)
+      const type = requestUrl.searchParams.get('type')
+
+      if (type === 'ERC20LOGPROCESSOR') {
+        return makeOkResponse([logProcessorOpportunity])
+      }
+
+      if (type === 'ERC20_MAPPING') {
+        return makeOkResponse({
+          opportunities: [mappingOpportunity, mappingOpportunity],
+        })
+      }
+
+      throw new Error(`Unexpected Merkl type: ${type}`)
+    })
+
+    const service = new MerklApiService()
+    const opportunities = await service.getYearnVaultRewardOpportunities()
+
+    expect(opportunities).toEqual([
+      logProcessorOpportunity,
+      mappingOpportunity,
+    ])
+    expect(mocks.fetchGet).toHaveBeenCalledTimes(2)
+    expect(mocks.fetchGet).toHaveBeenCalledWith(
+      expect.stringMatching(/\/v4\/opportunities\?.*type=ERC20LOGPROCESSOR/),
+    )
+    expect(mocks.fetchGet).toHaveBeenCalledWith(
+      expect.stringMatching(/\/v4\/opportunities\?.*type=ERC20_MAPPING/),
+    )
+  })
+
   it('logs when a blacklist removes the active APR-breakdown campaign', async () => {
     const vaultAddress = '0x93Fec6639717b6215A48E5a72a162C50DCC40d68'
     const blacklistedCampaignId =

@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 
 import { DataCacheService } from '../../services/dataCache'
-import type { YearnStrategy, YearnVaultExtra } from '../../types/yearn'
+import type {
+  YearnStrategy,
+  YearnVaultAPY,
+  YearnVaultExtra,
+} from '../../types/yearn'
 
 export const dynamic = 'force-dynamic'
 
@@ -98,21 +102,94 @@ function buildStrategyOutputs(
 ): KongOutput[] {
   return strategies.flatMap((strategy) => {
     const address = strategy.address
-    const value = toFiniteNumber(strategy.strategyRewardsAPR)
 
-    if (!address || value == null) {
+    if (!address) {
       return []
     }
 
-    return [
-      {
+    const outputs: KongOutput[] = []
+    const apr = toFiniteNumber(strategy.estimatedAPR)
+    const apy = toFiniteNumber(strategy.estimatedAPY)
+    const katRewardsAPR = toFiniteNumber(strategy.strategyRewardsAPR)
+
+    if (apr != null) {
+      outputs.push({
+        ...base,
+        address,
+        component: 'apr',
+        value: apr,
+      })
+    }
+
+    if (apy != null) {
+      outputs.push({
+        ...base,
+        address,
+        component: 'apy',
+        value: apy,
+      })
+    }
+
+    for (const [component, value] of Object.entries(
+      strategy.estimatedComponents || {},
+    )) {
+      const finiteValue = toFiniteNumber(value)
+      if (finiteValue == null) {
+        continue
+      }
+
+      outputs.push({
+        ...base,
+        address,
+        component,
+        value: finiteValue,
+      })
+    }
+
+    if (katRewardsAPR != null) {
+      outputs.push({
         ...base,
         address,
         component: STRATEGY_APR_COMPONENT,
-        value,
-      },
-    ]
+        value: katRewardsAPR,
+      })
+    }
+
+    return outputs
   })
+}
+
+function buildForwardAprOutputs(
+  forwardAPR: YearnVaultAPY['forwardAPR'],
+  base: Omit<KongOutput, 'address' | 'component' | 'value'>,
+  address: string,
+): KongOutput[] {
+  if (!forwardAPR) {
+    return []
+  }
+
+  const outputs: KongOutput[] = []
+  const apr = toFiniteNumber(forwardAPR.apr)
+  const apy = toFiniteNumber(forwardAPR.apy)
+
+  if (apr != null) {
+    outputs.push({ ...base, address, component: 'apr', value: apr })
+  }
+
+  if (apy != null) {
+    outputs.push({ ...base, address, component: 'apy', value: apy })
+  }
+
+  for (const [component, value] of Object.entries(forwardAPR.components)) {
+    const finiteValue = toFiniteNumber(value)
+    if (finiteValue == null) {
+      continue
+    }
+
+    outputs.push({ ...base, address, component, value: finiteValue })
+  }
+
+  return outputs
 }
 
 export async function POST(req: NextRequest): Promise<Response> {
@@ -147,6 +224,8 @@ export async function POST(req: NextRequest): Promise<Response> {
 
       const extra = vault.apr?.extra || {}
       const base = { chainId, label, blockNumber, blockTime }
+
+      outputs.push(...buildForwardAprOutputs(vault.apr?.forwardAPR, base, address))
 
       for (const component of COMPONENTS) {
         outputs.push({ ...base, address, component, value: extra[component] ?? 0 })

@@ -30,7 +30,14 @@ type KongVaultCompositionItem = {
   performanceFee?: string | number
   latestReportApr?: number | null
   performance?: {
+    oracle?: {
+      apr?: number | null
+      apy?: number | null
+      source?: string | null
+    }
     estimated?: {
+      apr?: number | null
+      apy?: number | null
       components?: Record<string, number | string | null>
     }
   }
@@ -134,17 +141,17 @@ const normalizeShareValue = (
 
 const calculateDebtRatio = (
   strategyDebt: unknown,
-  vaultDebt: unknown,
+  vaultTotalAssets: unknown,
 ): number | undefined => {
   try {
     const debt = BigInt(String(strategyDebt ?? '0'))
-    const totalDebt = BigInt(String(vaultDebt ?? '0'))
-    if (debt <= BigInt(0) || totalDebt <= BigInt(0)) {
+    const totalAssets = BigInt(String(vaultTotalAssets ?? '0'))
+    if (debt <= BigInt(0) || totalAssets <= BigInt(0)) {
       return undefined
     }
 
     return Number(
-      (debt * BigInt(10_000) + totalDebt / BigInt(2)) / totalDebt,
+      (debt * BigInt(10_000) + totalAssets / BigInt(2)) / totalAssets,
     )
   } catch {
     return undefined
@@ -196,6 +203,21 @@ const mapKongCompositionToYearnStrategy = (
   const estimatedKatRewardsAPR = toFiniteNumberOrNull(
     strategy.performance?.estimated?.components?.katRewardsAPR,
   )
+  const oracleAPR = toFiniteNumberOrNull(strategy.performance?.oracle?.apr)
+  const oracleAPY = toFiniteNumberOrNull(strategy.performance?.oracle?.apy)
+  const oracleSource = strategy.performance?.oracle?.source
+  const hasOracleEstimate = oracleAPR !== null || oracleAPY !== null
+  const normalizedOracleSource =
+    typeof oracleSource === 'string' && oracleSource ? oracleSource : null
+  const estimatedAPR = toFiniteNumberOrNull(strategy.performance?.estimated?.apr)
+  const estimatedAPY = toFiniteNumberOrNull(strategy.performance?.estimated?.apy)
+  const estimatedComponents = strategy.performance?.estimated?.components
+    ? Object.fromEntries(
+        Object.entries(strategy.performance.estimated.components)
+          .map(([key, value]) => [key, toFiniteNumberOrNull(value)])
+          .filter((entry): entry is [string, number] => entry[1] !== null),
+      )
+    : undefined
   const details: YearnStrategyDetails = {
     totalDebt,
     totalGain: toStringValue(strategy.totalGain),
@@ -203,7 +225,7 @@ const mapKongCompositionToYearnStrategy = (
     lastReport: toNumber(strategy.lastReport),
     performanceFee: toNumber(strategy.performanceFee),
   }
-  const debtRatio = calculateDebtRatio(totalDebt, snapshot.totalDebt)
+  const debtRatio = calculateDebtRatio(totalDebt, snapshot.totalAssets)
   if (debtRatio !== undefined) {
     details.debtRatio = debtRatio
   }
@@ -213,6 +235,12 @@ const mapKongCompositionToYearnStrategy = (
     name: strategy.name || 'Unknown',
     status: totalDebt === '0' ? 'unallocated' : strategy.status,
     netAPR: toPositiveFiniteNumberOrNull(strategy.latestReportApr),
+    ...(oracleAPR !== null ? { oracleAPR } : {}),
+    ...(oracleAPY !== null ? { oracleAPY } : {}),
+    ...(hasOracleEstimate ? { oracleSource: normalizedOracleSource } : {}),
+    ...(estimatedAPR !== null ? { estimatedAPR } : {}),
+    ...(estimatedAPY !== null ? { estimatedAPY } : {}),
+    ...(estimatedComponents ? { estimatedComponents } : {}),
     strategyRewardsAPR: estimatedKatRewardsAPR,
     rewardToken:
       estimatedKatRewardsAPR !== null && estimatedKatRewardsAPR > 0
@@ -264,15 +292,11 @@ const mapKongAprToYearnApr = (snapshot: KongVaultSnapshot): YearnVaultAPY => {
       ),
     },
     forwardAPR: {
-      type: '',
-      netAPR: null,
-      composite: {
-        boost: null,
-        poolAPY: null,
-        boostedAPR: null,
-        baseAPR: null,
-        cvxAPR: null,
-        rewardsAPR: null,
+      type: 'katana-estimated-apr',
+      apr: null,
+      apy: null,
+      components: {
+        estimatedDebtCoverage: 0,
       },
     },
   }

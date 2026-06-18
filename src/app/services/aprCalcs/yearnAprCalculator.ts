@@ -14,8 +14,8 @@ import { calculateYearnVaultRewardsAPR } from './utils'
  * @returns A promise that resolves to a record mapping each vault address (string) to an array of RewardCalculatorResult objects.
  *
  * @remarks
- * This function fetches ERC20 log processor opportunities from the Merkl API,
- * then calculates the APR for each provided vault using the `calculateYearnVaultRewardsAPR` utility.
+ * This function fetches Merkl vault reward opportunities, then calculates the
+ * APR for each provided vault using the `calculateYearnVaultRewardsAPR` utility.
  * The results are returned as a mapping from vault address to calculated APR results.
  */
 export class YearnAprCalculator implements APRCalculator {
@@ -33,7 +33,7 @@ export class YearnAprCalculator implements APRCalculator {
     vaults: YearnVault[]
   ): Promise<Record<string, RewardCalculatorResult[]>> {
     const yearnOpportunities =
-      await this.merklApi.getErc20LogProcessorOpportunities()
+      await this.merklApi.getYearnVaultRewardOpportunities()
 
     // Calculate APRs for each vault
     const resultEntries = vaults.map((vault) => {

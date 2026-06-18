@@ -14,6 +14,7 @@ export interface MerklCampaign {
 }
 
 export interface MerklOpportunity {
+  id?: string | number
   chainId: number
   name: string
   apr?: number
@@ -22,6 +23,9 @@ export interface MerklOpportunity {
       identifier?: string
       value?: number
     }>
+  }
+  nativeAprRecord?: {
+    value?: number
   }
   tags?: string[]
   tvl: number

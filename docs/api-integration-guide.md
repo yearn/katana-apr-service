@@ -9,14 +9,16 @@ If you are debugging rewards, adding new vault types, or validating Merkl behavi
 At request time, the service:
 
 1. Fetches Katana vaults from Kong.
-2. Fetches live `ERC20LOGPROCESSOR` opportunities from Merkl (with campaigns).
-3. Filters Merkl campaigns with a local blacklist.
-4. Matches each vault to a Merkl opportunity.
-5. Keeps only campaigns that:
+2. Fetches live `ERC20LOGPROCESSOR` and `ERC20_MAPPING` vault reward opportunities from Merkl (with campaigns).
+3. Fetches Morpho vault estimates from the Morpho GraphQL API for mapped Morpho compounder strategies.
+4. Filters Merkl campaigns with a local blacklist.
+5. Matches each vault to a Merkl opportunity.
+6. Keeps only campaigns that:
    - have an APR breakdown entry, and
    - pay allowlisted KAT token addresses.
-6. Aggregates APR and appends `apr.extra` fields.
-7. Returns vault data from `GET /api/vaults`.
+7. Computes `apr.forwardAPR` as a current estimate using Morpho offchain data and strategy oracle data, weighted by each strategy's current debt divided by vault total assets.
+8. Aggregates APR and appends `apr.extra` fields.
+9. Returns vault data from `GET /api/vaults`.
 
 ## Code Map
 
@@ -29,9 +31,11 @@ At request time, the service:
 - External APIs:
   - `src/app/services/externalApis/yearnApi.ts`
   - `src/app/services/externalApis/merklApi.ts`
+  - `src/app/services/externalApis/morphoApi.ts`
   - `src/app/services/externalApis/katanaPriceService.ts`
   - `src/app/services/externalApis/merklBlacklist.ts`
 - APR matching logic:
+  - `src/app/services/aprCalcs/forwardAprCalculator.ts`
   - `src/app/services/aprCalcs/yearnAprCalculator.ts`
   - `src/app/services/aprCalcs/utils.ts`
 - Shared reward-token allowlist:
@@ -89,7 +93,8 @@ Primary params used in app code:
 
 - `status=LIVE`
 - `chainId=747474`
-- `type=ERC20LOGPROCESSOR`
+- `type=ERC20LOGPROCESSOR` for log-processor vault opportunities
+- `type=ERC20_MAPPING` for mapped vault opportunities such as vbWBTC
 - `campaigns=true`
 
 Useful documented filters for debugging:
@@ -102,11 +107,13 @@ Useful documented filters for debugging:
 Examples:
 
 ```bash
-# Core query used by this service
+# Core vault reward queries used by this service
 curl -sS 'https://api.merkl.xyz/v4/opportunities?chainId=747474&type=ERC20LOGPROCESSOR&status=LIVE&campaigns=true'
+curl -sS 'https://api.merkl.xyz/v4/opportunities?chainId=747474&type=ERC20_MAPPING&status=LIVE&campaigns=true'
 
 # Find one opportunity by identifier (vault address)
 curl -sS 'https://api.merkl.xyz/v4/opportunities/?chainId=747474&type=ERC20LOGPROCESSOR&status=LIVE&campaigns=true&identifier=0x80c34BD3A3569E126e7055831036aa7b212cB159'
+curl -sS 'https://api.merkl.xyz/v4/opportunities/?chainId=747474&type=ERC20_MAPPING&status=LIVE&campaigns=true&identifier=0xAa0362eCC584B985056E47812931270b99C91f9d'
 
 # Find opportunities containing a specific campaign
 curl -sS 'https://api.merkl.xyz/v4/opportunities/?chainId=747474&type=ERC20LOGPROCESSOR&status=LIVE&campaigns=true&campaignId=0xc5a22d022154d5c64ff14b2f4071f134eb83cf159f9f846ad0ba0908a755e86d'
@@ -136,13 +143,25 @@ Notes:
 
 ### 2) Merkl fetch
 
-`MerklApiService.getErc20LogProcessorOpportunities()` fetches Merkl opportunities and campaign payloads.
+`MerklApiService.getYearnVaultRewardOpportunities()` fetches Merkl `ERC20LOGPROCESSOR` and `ERC20_MAPPING` opportunities and campaign payloads for vault-level Yearn rewards.
+
+Strategy reward lookup still uses its existing strategy-specific Merkl fetches; `ERC20_MAPPING` was added only to the vault-level Yearn reward path.
 
 When `MERKL_BASE_URI` is left at the default `https://api.merkl.xyz`, it falls back to `https://api.merkl.fr` and `https://api-merkl.angle.money` before returning an empty result.
 
 If `MERKL_BASE_URI` is overridden to a custom proxy, staging host, or local mock, the service stays on that host and returns an empty result on failure.
 
-### 3) Blacklist filter
+### 3) Morpho estimate fetch
+
+`MorphoApiService.getVaultEstimates()` queries Morpho GraphQL for mapped Morpho vault compounders.
+
+- V1 vaults use `state.apy` as base APY and `state.allRewards[].supplyApr` for token rewards.
+- V2 vaults use `avgNetApyExcludingRewards` as base APY and `rewards[].supplyApr` for token rewards.
+- MORPHO token rewards are included in the current estimate because they are sold and compounded.
+- KAT rewards are tracked separately and stay out of `forwardAPR.apy` unless product confirms they are auto-compounded.
+- Merkl Morpho opportunity data is used as fallback/validation when the Morpho API cannot provide a mapped vault estimate.
+
+### 4) Blacklist filter
 
 `MerklApiService.filterCampaigns()` removes campaign IDs in:
 
@@ -153,7 +172,7 @@ Current excluded IDs:
 - `0x487022e5f413f60e3e6aa251712f9c2d6601f01d14b565e779a61b68c173bd6c`
 - `0xc5a22d022154d5c64ff14b2f4071f134eb83cf159f9f846ad0ba0908a755e86d`
 
-### 4) Opportunity selection per vault
+### 5) Opportunity selection per vault
 
 `calculateYearnVaultRewardsAPR()` uses `findBestOpportunityByAddress()`:
 
@@ -163,7 +182,7 @@ Current excluded IDs:
 
 This avoids selecting suffix variants like `0x...JUMPER` when a better exact match exists.
 
-### 5) Campaign/APR match
+### 6) Campaign/APR match
 
 For each campaign in the chosen opportunity:
 
@@ -180,22 +199,36 @@ APR units:
 - Merkl `breakdown.value` is a percent value (for example `0.56` means `0.56%`).
 - Service converts to decimal by dividing by `100` before storing strategy-level `strategyRewardsAPR` values and vault-level Katana reward fields.
 
-### 6) Final vault output shaping
+### 7) Final vault output shaping
 
 `DataCacheService.aggregateVaultResults()` sets:
 
 - `strategies[].strategyRewardsAPR` for active Morpho/Steer strategies as raw strategy APR in decimal form
+- `strategies[].oracleAPR`, `strategies[].oracleAPY`, and `strategies[].oracleSource` from Kong strategy oracle hydration
+- `strategies[].estimatedAPR`, `strategies[].estimatedAPY`, and `strategies[].estimatedComponents` from the forward estimate calculator when available
 - `strategies[].rewardToken` and `strategies[].underlyingContract` when the strategy pool/token could be resolved
+- `apr.forwardAPR` as:
+  - `type: "katana-estimated-apr"`
+  - `apy`: current strategy estimate weighted by `strategy.currentDebt / vault.totalAssets`, when every active strategy with debt can be safely estimated
+  - `apr`: inverse of Kong's weekly `computeApy(apr)` convention for the same estimate
+  - `components`: weighted estimate components such as `baseNetAPY`, `morphoBaseAPY`, `morphoRewardsAPR`, `morphoRewardsAPY`, `steerAPY`, and `estimatedDebtCoverage`
 - `apr.extra.katanaRewardsAPR` (legacy alias)
 - `apr.extra.katanaAppRewardsAPR` from Yearn vault-level rewards
 - `apr.extra.fixedRateKatanaRewards` (legacy compatibility field; fixed-rate KAT rewards have ended and this is always `0`)
 - `apr.extra.katanaBonusAPY` (`0` post-TGE, kept for compatibility)
-- `apr.extra.katanaNativeYield` (`vault.apr.netAPR`, mapped from Kong monthly net APY for yDaemon compatibility)
+- `apr.extra.katanaNativeYield` from the estimated base component when available, with historical `vault.apr.netAPR` only as fallback for yDaemon compatibility
 - `apr.extra.steerPointsPerDollar` (`0`; legacy field kept after the points program ended)
 
 Weighting notes:
 
-- Strategy entries expose raw APR so downstream consumers can see which rewards path is active per strategy.
+- `apr.netAPR` remains historical PPS-derived performance and is not the current forward estimate.
+- Morpho compounder strategy estimates use Morpho API or Merkl data, including compounded MORPHO rewards.
+- Morpho Lender Borrower strategies continue to use the strategy APR oracle path.
+- Steer and other non-Morpho strategy estimates use strategy oracle APY/APR data hydrated by Kong.
+- `strategies[].oracleSource` reports the accepted oracle function (`getStrategyApr` or `getCurrentApr`) when Kong provides it, and is `null` for existing Kong rows that predate source tracking.
+- Active strategy estimates are weighted by current debt divided by vault total assets, so idle assets naturally contribute 0 APY.
+- `components.estimatedDebtCoverage` reports covered active strategy debt divided by vault total assets.
+- If active Morpho strategy debt cannot be safely mapped, top-level `forwardAPR.apy` and `forwardAPR.apr` are omitted. Idle assets alone do not suppress top-level `forwardAPR.apy`.
 - The top-level vault reward fields are unchanged by this strategy decoration and should continue matching the existing live service semantics.
 
 Why calculators are split:
@@ -250,7 +283,7 @@ Snippet:
 }
 ```
 
-### 2) Merkl by identifier (USDC yVault)
+### 2) Merkl by identifier (USDC yVault log processor)
 
 Query:
 
@@ -303,7 +336,26 @@ Snippet:
 }
 ```
 
-### 4) Merkl by campaignId (AUSD blacklisted campaign)
+### 4) Merkl by identifier (vbWBTC yVault mapping)
+
+Query:
+
+```bash
+curl -sS 'https://api.merkl.xyz/v4/opportunities/?chainId=747474&type=ERC20_MAPPING&status=LIVE&campaigns=true&identifier=0xAa0362eCC584B985056E47812931270b99C91f9d'
+```
+
+Expected shape:
+
+```json
+{
+  "identifier": "0xAa0362eCC584B985056E47812931270b99C91f9d",
+  "type": "ERC20_MAPPING",
+  "status": "LIVE",
+  "apr": 0.25450353429333744
+}
+```
+
+### 5) Merkl by campaignId (AUSD blacklisted campaign)
 
 Query:
 
@@ -394,12 +446,15 @@ Notes:
 - Verifies `kong-signature` HMAC (`KONG_WEBHOOK_SECRET`).
 - Accepts webhook body containing vault addresses.
 - Emits one row per requested vault per component:
+  - `apr`
+  - `apy`
+  - every `apr.forwardAPR.components` entry
   - `katanaAppRewardsAPR`
   - `fixedRateKatanaRewards`
   - `katanaBonusAPY`
   - `katanaNativeYield`
   - `steerPointsPerDollar` (legacy, always `0`)
-- Also emits strategy-addressed `katRewardsAPR` rows for strategies where `strategyRewardsAPR` is present, reusing the incoming estimated-APR label so Kong can hydrate them onto vault composition entries.
+- Also emits strategy-addressed `apr`, `apy`, estimated component rows, and `katRewardsAPR` rows where present, reusing the incoming estimated-APR label so Kong can hydrate them onto vault composition entries.
 
 ### `GET /api/health`
 
@@ -414,7 +469,7 @@ Notes:
 When a vault looks wrong:
 
 1. Confirm vault exists in Kong list output and its snapshot endpoint returns strategy composition.
-2. Query Merkl by `identifier=<vaultAddress>`.
+2. Query Merkl by `identifier=<vaultAddress>` for both `type=ERC20LOGPROCESSOR` and `type=ERC20_MAPPING`.
 3. Check `aprRecord.breakdowns[].identifier`.
 4. Verify matching `campaigns[].campaignId` still exists after blacklist.
 5. Verify reward token is in `KATANA_REWARD_TOKEN_ADDRESSES`.

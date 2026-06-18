@@ -7,6 +7,10 @@ import { SushiAprCalculator } from './aprCalcs/sushiAprCalculator'
 import { YearnAprCalculator } from './aprCalcs/yearnAprCalculator'
 import { logVaultAprDebug } from './aprCalcs/debugLogger'
 import {
+  ForwardAprCalculator,
+  type VaultForwardAprEstimate,
+} from './aprCalcs/forwardAprCalculator'
+import {
   type RewardCalculatorResult,
   TokenBreakdown,
   type VaultRewardCalculatorResult,
@@ -37,12 +41,14 @@ export class DataCacheService {
   private yearnAprCalculator: YearnAprCalculator
   private morphoAprCalculator: MorphoAprCalculator
   private sushiAprCalculator: SushiAprCalculator
+  private forwardAprCalculator: ForwardAprCalculator
 
   constructor() {
     this.yearnApi = new YearnApiService()
     this.yearnAprCalculator = new YearnAprCalculator()
     this.morphoAprCalculator = new MorphoAprCalculator()
     this.sushiAprCalculator = new SushiAprCalculator()
+    this.forwardAprCalculator = new ForwardAprCalculator()
   }
 
   async generateVaultAPRData(): Promise<APRDataCache> {
@@ -63,10 +69,12 @@ export class DataCacheService {
       yearnAPRs,
       morphoAPRs,
       sushiAPRs,
+      forwardAPRs,
     ] = await Promise.all([
       this.yearnAprCalculator.calculateVaultAPRs(vaults),
       this.morphoAprCalculator.calculateVaultAPRs(vaults),
       this.sushiAprCalculator.calculateVaultAPRs(vaults),
+      this.forwardAprCalculator.calculateVaultForwardAPRs(vaults),
     ])
 
     // Aggregate results for each vault
@@ -81,8 +89,11 @@ export class DataCacheService {
             .flattenDeep()
             .compact()
             .value()
+          const forwardApr =
+            forwardAPRs[vault.address] ||
+            forwardAPRs[vault.address.toLowerCase()]
 
-          if (allResults.length === 0) {
+          if (allResults.length === 0 && !forwardApr) {
             logVaultAprDebug({
               stage: 'fallback',
               vaultAddress: vault.address,
@@ -112,7 +123,7 @@ export class DataCacheService {
 
           return [
             vault.address,
-            this.aggregateVaultResults(vault, allResults),
+            this.aggregateVaultResults(vault, allResults, forwardApr),
           ]
         } catch (error) {
           console.error(`Error processing vault ${vault.address}:`, error)
@@ -155,6 +166,7 @@ export class DataCacheService {
   private aggregateVaultResults(
     vault: YearnVault,
     results: VaultRewardCalculatorResult[],
+    forwardApr?: VaultForwardAprEstimate,
   ): YearnVault {
     const strategyResults = results.filter(
       (result): result is RewardCalculatorResult => 'strategyAddress' in result,
@@ -168,6 +180,9 @@ export class DataCacheService {
       const strategyRewards = strategyAddress
         ? strategyRewardsByAddress[strategyAddress]
         : undefined
+      const strategyForwardApr = strategyAddress
+        ? forwardApr?.strategies[strategyAddress]
+        : undefined
       const strategyRewardsAPR = strategyRewards
         ? strategyRewards.rawApr > 0
           ? strategyRewards.rawApr
@@ -176,22 +191,19 @@ export class DataCacheService {
 
       return {
         ...strategy,
-        ...(strategyRewards
-          ? {
-              strategyRewardsAPR,
-              rewardToken: strategyRewards.rewardToken
-                ? { ...strategyRewards.rewardToken }
-                : strategy.rewardToken ?? null,
-              underlyingContract:
-                strategyRewards.underlyingContract ??
-                strategy.underlyingContract ??
-                null,
-            }
-          : {
-              strategyRewardsAPR: strategy.strategyRewardsAPR ?? null,
-              rewardToken: strategy.rewardToken ?? null,
-              underlyingContract: strategy.underlyingContract ?? null,
-            }),
+        strategyRewardsAPR,
+        rewardToken: strategyRewards?.rewardToken
+          ? { ...strategyRewards.rewardToken }
+          : strategy.rewardToken ?? null,
+        underlyingContract:
+          strategyRewards?.underlyingContract ??
+          strategyForwardApr?.underlyingContract ??
+          strategy.underlyingContract ??
+          null,
+        estimatedAPR: strategyForwardApr?.apr ?? strategy.estimatedAPR ?? null,
+        estimatedAPY: strategyForwardApr?.apy ?? strategy.estimatedAPY ?? null,
+        estimatedComponents:
+          strategyForwardApr?.components ?? strategy.estimatedComponents,
       }
     })
 
@@ -213,10 +225,12 @@ export class DataCacheService {
 
     const vaultKatanaBonusAPY = 0
 
-    const katanaNativeYield = vault.apr?.netAPR || 0
+    const katanaNativeYield =
+      forwardApr?.forwardAPR.components.baseNetAPY ?? vault.apr?.netAPR ?? 0
 
     const apr = {
       ...vault.apr,
+      forwardAPR: forwardApr?.forwardAPR ?? vault.apr?.forwardAPR,
       extra: {
         ...(vault.apr?.extra || {}),
         stakingRewardsAPR: null,

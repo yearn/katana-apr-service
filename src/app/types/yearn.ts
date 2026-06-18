@@ -19,6 +19,12 @@ export interface YearnStrategy {
   name: string
   status?: string
   netAPR?: number | null
+  oracleAPR?: number | null
+  oracleAPY?: number | null
+  oracleSource?: string | null
+  estimatedAPR?: number | null
+  estimatedAPY?: number | null
+  estimatedComponents?: Record<string, number | null>
   strategyRewardsAPR?: number | null
   rewardToken?: YearnRewardToken | null
   underlyingContract?: string | null
@@ -62,16 +68,10 @@ export interface YearnVaultAPY {
   pricePerShare?: YearnVaultPricePerShare
   extra?: YearnVaultExtra
   forwardAPR?: {
-    type: string
-    netAPR: number | null
-    composite: {
-      boost: number | null
-      poolAPY: number | null
-      boostedAPR: number | null
-      baseAPR: number | null
-      cvxAPR: number | null
-      rewardsAPR: number | null
-    }
+    type: 'katana-estimated-apr'
+    apr?: number | null
+    apy?: number | null
+    components: Record<string, number | null>
   }
 }
 

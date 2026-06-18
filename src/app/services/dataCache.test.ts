@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   mockCalculateYearnVaultAPRs: vi.fn(),
   mockCalculateMorphoVaultAPRs: vi.fn(),
   mockCalculateSushiVaultAPRs: vi.fn(),
+  mockCalculateVaultForwardAPRs: vi.fn(),
   logVaultAprDebug: vi.fn(),
 }))
 
@@ -30,6 +31,12 @@ vi.mock('./aprCalcs/morphoAprCalculator', () => ({
 vi.mock('./aprCalcs/sushiAprCalculator', () => ({
   SushiAprCalculator: vi.fn().mockImplementation(() => ({
     calculateVaultAPRs: mocks.mockCalculateSushiVaultAPRs,
+  })),
+}))
+
+vi.mock('./aprCalcs/forwardAprCalculator', () => ({
+  ForwardAprCalculator: vi.fn().mockImplementation(() => ({
+    calculateVaultForwardAPRs: mocks.mockCalculateVaultForwardAPRs,
   })),
 }))
 
@@ -59,10 +66,12 @@ describe('DataCacheService.generateVaultAPRData', () => {
     mocks.mockCalculateYearnVaultAPRs.mockReset()
     mocks.mockCalculateMorphoVaultAPRs.mockReset()
     mocks.mockCalculateSushiVaultAPRs.mockReset()
+    mocks.mockCalculateVaultForwardAPRs.mockReset()
     mocks.logVaultAprDebug.mockReset()
     mocks.mockCalculateYearnVaultAPRs.mockResolvedValue({})
     mocks.mockCalculateMorphoVaultAPRs.mockResolvedValue({})
     mocks.mockCalculateSushiVaultAPRs.mockResolvedValue({})
+    mocks.mockCalculateVaultForwardAPRs.mockResolvedValue({})
   })
 
   it('returns fallback payload when all calculator results are empty', async () => {
@@ -102,6 +111,9 @@ describe('DataCacheService.generateVaultAPRData', () => {
           address: STRATEGY_ADDRESS,
           name: 'Morpho Strategy',
           status: 'active',
+          oracleAPR: 0.01,
+          oracleAPY: 0.0101,
+          oracleSource: 'getStrategyApr',
           details: {
             totalDebt: '25',
             totalGain: '0',
@@ -179,6 +191,39 @@ describe('DataCacheService.generateVaultAPRData', () => {
         },
       ],
     })
+    mocks.mockCalculateVaultForwardAPRs.mockResolvedValue({
+      [vault.address]: {
+        forwardAPR: {
+          type: 'katana-estimated-apr',
+          apr: 0.031,
+          apy: 0.0315,
+          components: {
+            baseNetAPY: 0.02,
+            morphoBaseAPY: 0.015,
+            morphoRewardsAPR: 0.004,
+            morphoRewardsAPY: 0.004,
+            steerAPY: 0.0115,
+            estimatedDebtCoverage: 1,
+          },
+        },
+        strategies: {
+          [STRATEGY_ADDRESS]: {
+            strategyAddress: STRATEGY_ADDRESS,
+            apr: 0.02,
+            apy: 0.0202,
+            components: {
+              baseNetAPY: 0.016,
+              morphoBaseAPY: 0.016,
+              morphoRewardsAPR: 0.004,
+              morphoRewardsAPY: 0.0042,
+            },
+            underlyingContract:
+              '0x0000000000000000000000000000000000000abc',
+            covered: true,
+          },
+        },
+      },
+    })
 
     const service = new DataCacheService()
     const data = await service.generateVaultAPRData()
@@ -189,8 +234,33 @@ describe('DataCacheService.generateVaultAPRData', () => {
     expect(aggregatedVault.apr?.extra?.katanaRewardsAPR).toBeCloseTo(0.1)
     expect(aggregatedVault.apr?.extra?.fixedRateKatanaRewards).toBe(0)
     expect(aggregatedVault.apr?.extra?.katanaBonusAPY).toBe(0)
+    expect(aggregatedVault.apr?.extra?.katanaNativeYield).toBe(0.02)
     expect(aggregatedVault.apr?.extra?.steerPointsPerDollar).toBe(0)
+    expect(aggregatedVault.apr?.forwardAPR).toEqual({
+      type: 'katana-estimated-apr',
+      apr: 0.031,
+      apy: 0.0315,
+      components: {
+        baseNetAPY: 0.02,
+        morphoBaseAPY: 0.015,
+        morphoRewardsAPR: 0.004,
+        morphoRewardsAPY: 0.004,
+        steerAPY: 0.0115,
+        estimatedDebtCoverage: 1,
+      },
+    })
+    expect(aggregatedVault.apr?.forwardAPR).not.toHaveProperty('netAPR')
+    expect(aggregatedVault.apr?.forwardAPR).not.toHaveProperty('composite')
     expect(aggregatedVault.strategies[0].strategyRewardsAPR).toBe(0.04)
+    expect(aggregatedVault.strategies[0].oracleSource).toBe('getStrategyApr')
+    expect(aggregatedVault.strategies[0].estimatedAPY).toBe(0.0202)
+    expect(aggregatedVault.strategies[0].estimatedAPR).toBe(0.02)
+    expect(aggregatedVault.strategies[0].estimatedComponents).toEqual({
+      baseNetAPY: 0.016,
+      morphoBaseAPY: 0.016,
+      morphoRewardsAPR: 0.004,
+      morphoRewardsAPY: 0.0042,
+    })
     expect(aggregatedVault.strategies[0].rewardToken).toEqual({
       address: '0x00000000000000000000000000000000000000bb',
       symbol: 'KAT',
