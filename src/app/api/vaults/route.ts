@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { captureError, flushObservability } from '../../../observability'
 import { DataCacheService } from '../../services/dataCache'
 
 const dataCacheService = new DataCacheService()
@@ -30,6 +31,8 @@ export async function GET(): Promise<NextResponse> {
     return NextResponse.json(data, { status: 200, headers })
   } catch (error) {
     const err = error as Error
+    captureError(error)
+    await flushObservability()
     const errorHeaders: Record<string, string> = {
       ...getCORSHeaders(),
       'Cache-Control': 'no-store',
