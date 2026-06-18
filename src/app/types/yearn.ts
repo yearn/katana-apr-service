@@ -71,6 +71,8 @@ export interface YearnVaultAPY {
     type: 'katana-estimated-apr'
     apr?: number | null
     apy?: number | null
+    netAPR?: number | null
+    netAPY?: number | null
     components: Record<string, number | null>
   }
 }

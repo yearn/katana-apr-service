@@ -60,6 +60,7 @@ describe('/api/webhook route', () => {
             estimatedComponents: {
               baseNetAPY: 0.04,
               morphoRewardsAPR: 0.005,
+              katRewardsAPR: 0.123,
             },
           },
           {
@@ -78,10 +79,13 @@ describe('/api/webhook route', () => {
           },
         ],
         apr: {
+          netAPR: 0.222,
           forwardAPR: {
             type: 'katana-estimated-apr',
             apr: 0.05,
             apy: 0.051,
+            netAPR: 0.047,
+            netAPY: 0.048,
             components: {
               baseNetAPY: 0.04,
               morphoBaseAPY: 0.03,
@@ -132,6 +136,24 @@ describe('/api/webhook route', () => {
         label: 'katana',
         component: 'apy',
         value: 0.051,
+        blockNumber: '123',
+        blockTime: '456',
+      },
+      {
+        chainId: 747474,
+        address: REQUEST_VAULT_ADDRESS,
+        label: 'katana',
+        component: 'netAPR',
+        value: 0.047,
+        blockNumber: '123',
+        blockTime: '456',
+      },
+      {
+        chainId: 747474,
+        address: REQUEST_VAULT_ADDRESS,
+        label: 'katana',
+        component: 'netAPY',
+        value: 0.048,
         blockNumber: '123',
         blockTime: '456',
       },

@@ -12,6 +12,11 @@ import {
 
 const ESTIMATED_APR_TYPE = 'katana-estimated-apr' as const
 
+type FeeConfig = {
+  management?: number | null
+  performance?: number | null
+}
+
 const MORPHO_STRATEGY_TO_VAULT: Record<string, string> = {
   // USDC
   '0xd46dfdaa7caa8739b0e3274e2c085dffc8d4776a':
@@ -62,6 +67,8 @@ export interface VaultForwardAprEstimate {
     type: typeof ESTIMATED_APR_TYPE
     apr?: number | null
     apy?: number | null
+    netAPR?: number | null
+    netAPY?: number | null
     components: Record<string, number | null>
   }
   strategies: Record<string, StrategyForwardAprEstimate>
@@ -80,6 +87,18 @@ const toPositiveDebt = (strategy: YearnStrategy): number => {
 const toPositiveTotalAssets = (vault: YearnVault): number => {
   const parsed = Number(vault.tvl?.totalAssets ?? 0)
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
+}
+
+export const computeNetApr = (grossApr: number, fees: FeeConfig): number => {
+  if (grossApr <= 0) {
+    return 0
+  }
+
+  const management = toFiniteNumber(fees.management)
+  const performance = toFiniteNumber(fees.performance)
+  const net = (grossApr - management) * (1 - performance)
+
+  return Math.max(net, grossApr / 2)
 }
 
 const normalizeAddress = (address?: string | null): string | undefined => {
@@ -127,6 +146,9 @@ const isOpportunityType = (
   type: string,
 ): boolean => opportunity.type?.toUpperCase() === type
 
+const isLiveOpportunity = (opportunity: MerklOpportunity): boolean =>
+  opportunity.status.toUpperCase() === 'LIVE'
+
 const dedupeOpportunities = (
   opportunities: MerklOpportunity[],
 ): MerklOpportunity[] => {
@@ -153,10 +175,11 @@ const findMorphoFallbackOpportunities = (
   strategyAddress: string,
   morphoVaultAddress: string,
 ): MerklOpportunity[] => {
-  const underlyingMatches = opportunities.filter((opportunity) =>
+  const liveOpportunities = opportunities.filter(isLiveOpportunity)
+  const underlyingMatches = liveOpportunities.filter((opportunity) =>
     identifierMatchesAddress(opportunity.identifier, morphoVaultAddress),
   )
-  const strategyMatches = opportunities.filter((opportunity) =>
+  const strategyMatches = liveOpportunities.filter((opportunity) =>
     identifierMatchesAddress(opportunity.identifier, strategyAddress),
   )
 
@@ -267,11 +290,16 @@ export class ForwardAprCalculator {
     const totalAssets = toPositiveTotalAssets(vault)
 
     if (totalActiveDebt === 0) {
+      const grossApr = 0
+      const netApr = computeNetApr(grossApr, vault.apr?.fees ?? {})
+
       return {
         forwardAPR: {
           type: ESTIMATED_APR_TYPE,
-          apr: 0,
+          apr: grossApr,
           apy: 0,
+          netAPR: netApr,
+          netAPY: aprToApy(netApr),
           components: {
             baseNetAPY: 0,
             morphoBaseAPY: 0,
@@ -339,14 +367,21 @@ export class ForwardAprCalculator {
       oracleAPY: totals.oracleAPY,
       estimatedDebtCoverage,
     }
+    const shouldEmitTopLevel = totalAssets > 0 && activeDebtCoverage >= 0.999999
+    const grossApr = shouldEmitTopLevel ? apyToApr(totalApy) : undefined
+    const netApr = grossApr != null
+      ? computeNetApr(grossApr, vault.apr?.fees ?? {})
+      : undefined
 
     return {
       forwardAPR: {
         type: ESTIMATED_APR_TYPE,
-        ...(totalAssets > 0 && activeDebtCoverage >= 0.999999
+        ...(shouldEmitTopLevel && grossApr != null && netApr != null
           ? {
-              apr: apyToApr(totalApy),
+              apr: grossApr,
               apy: totalApy,
+              netAPR: netApr,
+              netAPY: aprToApy(netApr),
             }
           : {}),
         components,

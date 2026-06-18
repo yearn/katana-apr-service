@@ -8,7 +8,7 @@ import {
   type MorphoApiService,
 } from '../externalApis/morphoApi'
 import type { MerklApiService } from '../externalApis/merklApi'
-import { ForwardAprCalculator } from './forwardAprCalculator'
+import { computeNetApr, ForwardAprCalculator } from './forwardAprCalculator'
 
 const MORPHO_STRATEGY = '0xD46dFDAA7cAA8739B0e3274e2C085dFFc8d4776A'
 const STEER_STRATEGY = '0x00000000000000000000000000000000000000ee'
@@ -79,6 +79,7 @@ const makeMerklOpportunity = ({
   identifier,
   type,
   name,
+  status = 'LIVE',
   nativeAprPercent,
   morphoAprPercent,
   katAprPercent,
@@ -86,6 +87,7 @@ const makeMerklOpportunity = ({
   identifier: string
   type: string
   name: string
+  status?: string
   nativeAprPercent?: number
   morphoAprPercent?: number
   katAprPercent?: number
@@ -140,7 +142,7 @@ const makeMerklOpportunity = ({
     chainId: 747474,
     identifier,
     name,
-    status: 'LIVE',
+    status,
     type,
     tvl: 1,
     ...(nativeAprPercent !== undefined
@@ -190,6 +192,8 @@ describe('ForwardAprCalculator', () => {
     const forwardAPR =
       result['0x00000000000000000000000000000000000000aa'].forwardAPR
     const expectedApy = morphoApy * 0.3 + 0.05 * 0.2
+    const expectedApr = apyToApr(expectedApy)
+    const expectedNetApr = expectedApr
 
     expect(morphoApi.getVaultEstimates).toHaveBeenCalledWith([
       MORPHO_VAULT.toLowerCase(),
@@ -197,8 +201,10 @@ describe('ForwardAprCalculator', () => {
     expect(merklApi.getMorphoOpportunities).not.toHaveBeenCalled()
     expect(forwardAPR).toEqual({
       type: 'katana-estimated-apr',
-      apr: apyToApr(expectedApy),
+      apr: expectedApr,
       apy: expectedApy,
+      netAPR: expectedNetApr,
+      netAPY: aprToApy(expectedNetApr),
       components: {
         baseNetAPY: morphoBaseApy * 0.3 + 0.05 * 0.2,
         morphoBaseAPY: morphoBaseApy * 0.3,
@@ -229,6 +235,8 @@ describe('ForwardAprCalculator', () => {
 
     expect(forwardAPR).not.toHaveProperty('apr')
     expect(forwardAPR).not.toHaveProperty('apy')
+    expect(forwardAPR).not.toHaveProperty('netAPR')
+    expect(forwardAPR).not.toHaveProperty('netAPY')
     expect(forwardAPR.components.estimatedDebtCoverage).toBe(0.2)
     expect(forwardAPR.components.steerAPY).toBe(0.05 * 0.2)
   })
@@ -240,6 +248,15 @@ describe('ForwardAprCalculator', () => {
         type: 'ERC20LOGPROCESSOR',
         name: 'Hold strategy shares',
         katAprPercent: 99,
+      }),
+      makeMerklOpportunity({
+        identifier: MORPHO_VAULT,
+        type: 'MORPHOVAULT',
+        name: 'Past Morpho Gauntlet USDC Vault',
+        status: 'PAST',
+        nativeAprPercent: 50,
+        morphoAprPercent: 50,
+        katAprPercent: 50,
       }),
       makeMerklOpportunity({
         identifier: MORPHO_VAULT,
@@ -279,6 +296,8 @@ describe('ForwardAprCalculator', () => {
     expect(forwardAPR.components.morphoRewardsAPR).toBe(0.012)
     expect(forwardAPR.components.morphoKatRewardsAPR).toBe(0.023)
     expect(forwardAPR.apy).toBe(0.04 + aprToApy(0.012))
+    expect(forwardAPR.netAPR).toBe(forwardAPR.apr)
+    expect(forwardAPR.netAPY).toBeCloseTo(forwardAPR.apy ?? 0)
     expect(strategyEstimate.components.morphoRewardsAPR).toBe(0.012)
     expect(strategyEstimate.components.morphoKatRewardsAPR).toBe(0.023)
     expect(strategyEstimate.apy).toBe(0.04 + aprToApy(0.012))
@@ -322,9 +341,53 @@ describe('ForwardAprCalculator', () => {
     expect(strategyEstimate.apy).toBeNull()
     expect(vaultEstimate.forwardAPR).not.toHaveProperty('apr')
     expect(vaultEstimate.forwardAPR).not.toHaveProperty('apy')
+    expect(vaultEstimate.forwardAPR).not.toHaveProperty('netAPR')
+    expect(vaultEstimate.forwardAPR).not.toHaveProperty('netAPY')
     expect(vaultEstimate.forwardAPR.components.morphoRewardsAPR).toBe(0)
     expect(vaultEstimate.forwardAPR.components.morphoKatRewardsAPR).toBe(0)
     expect(vaultEstimate.forwardAPR.components.estimatedDebtCoverage).toBe(0)
+  })
+
+  it('fee-adjusts the top-level forward estimate with vault fees', async () => {
+    const { calculator } = buildCalculator({})
+
+    const result = await calculator.calculateVaultForwardAPRs([
+      makeVault({
+        apr: {
+          netAPR: 0.99,
+          fees: {
+            management: 0.01,
+            performance: 0.2,
+          },
+        },
+        strategies: [
+          {
+            address: STEER_STRATEGY,
+            name: 'Single Sided Steer AUSD-vbUSDC vbUSDC',
+            status: 'active',
+            oracleAPY: 0.08,
+            details: {
+              totalDebt: '100',
+              totalGain: '0',
+              totalLoss: '0',
+              lastReport: 0,
+            },
+          },
+        ],
+      }),
+    ])
+    const forwardAPR =
+      result['0x00000000000000000000000000000000000000aa'].forwardAPR
+    const grossApr = apyToApr(0.08)
+    const expectedNetApr = computeNetApr(grossApr, {
+      management: 0.01,
+      performance: 0.2,
+    })
+
+    expect(forwardAPR.apr).toBe(grossApr)
+    expect(forwardAPR.apy).toBe(0.08)
+    expect(forwardAPR.netAPR).toBe(expectedNetApr)
+    expect(forwardAPR.netAPY).toBe(aprToApy(expectedNetApr))
   })
 
   it('uses the oracle APR path for Morpho Lender Borrower strategies', async () => {
@@ -367,8 +430,33 @@ describe('ForwardAprCalculator', () => {
     expect(merklApi.getMorphoOpportunities).not.toHaveBeenCalled()
     expect(forwardAPR.apr).toBe(apyToApr(expectedApy))
     expect(forwardAPR.apy).toBe(expectedApy)
+    expect(forwardAPR.netAPR).toBe(forwardAPR.apr)
+    expect(forwardAPR.netAPY).toBeCloseTo(forwardAPR.apy ?? 0)
     expect(forwardAPR.components.estimatedDebtCoverage).toBe(1)
     expect(forwardAPR.components.oracleAPY).toBe(0.015)
     expect(forwardAPR.components.steerAPY).toBe(0.025)
+  })
+
+  describe('computeNetApr', () => {
+    it('returns gross APR when fees are zero', () => {
+      expect(computeNetApr(0.1, { management: 0, performance: 0 })).toBe(0.1)
+    })
+
+    it('applies management and performance fees', () => {
+      expect(
+        computeNetApr(0.1, { management: 0.02, performance: 0.2 }),
+      ).toBeCloseTo(0.064)
+    })
+
+    it('floors the result at half gross APR', () => {
+      expect(computeNetApr(0.1, { management: 0.2, performance: 0.2 })).toBe(
+        0.05,
+      )
+    })
+
+    it('returns zero for non-positive gross APR', () => {
+      expect(computeNetApr(0, { management: 0.01, performance: 0.2 })).toBe(0)
+      expect(computeNetApr(-0.01, { management: 0, performance: 0 })).toBe(0)
+    })
   })
 })

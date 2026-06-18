@@ -197,6 +197,8 @@ describe('DataCacheService.generateVaultAPRData', () => {
           type: 'katana-estimated-apr',
           apr: 0.031,
           apy: 0.0315,
+          netAPR: 0.029,
+          netAPY: 0.0294,
           components: {
             baseNetAPY: 0.02,
             morphoBaseAPY: 0.015,
@@ -240,6 +242,8 @@ describe('DataCacheService.generateVaultAPRData', () => {
       type: 'katana-estimated-apr',
       apr: 0.031,
       apy: 0.0315,
+      netAPR: 0.029,
+      netAPY: 0.0294,
       components: {
         baseNetAPY: 0.02,
         morphoBaseAPY: 0.015,
@@ -249,7 +253,7 @@ describe('DataCacheService.generateVaultAPRData', () => {
         estimatedDebtCoverage: 1,
       },
     })
-    expect(aggregatedVault.apr?.forwardAPR).not.toHaveProperty('netAPR')
+    expect(aggregatedVault.apr?.netAPR).toBe(0.02)
     expect(aggregatedVault.apr?.forwardAPR).not.toHaveProperty('composite')
     expect(aggregatedVault.strategies[0].strategyRewardsAPR).toBe(0.04)
     expect(aggregatedVault.strategies[0].oracleSource).toBe('getStrategyApr')

@@ -133,6 +133,10 @@ function buildStrategyOutputs(
     for (const [component, value] of Object.entries(
       strategy.estimatedComponents || {},
     )) {
+      if (component === STRATEGY_APR_COMPONENT) {
+        continue
+      }
+
       const finiteValue = toFiniteNumber(value)
       if (finiteValue == null) {
         continue
@@ -171,6 +175,8 @@ function buildForwardAprOutputs(
   const outputs: KongOutput[] = []
   const apr = toFiniteNumber(forwardAPR.apr)
   const apy = toFiniteNumber(forwardAPR.apy)
+  const netAPR = toFiniteNumber(forwardAPR.netAPR)
+  const netAPY = toFiniteNumber(forwardAPR.netAPY)
 
   if (apr != null) {
     outputs.push({ ...base, address, component: 'apr', value: apr })
@@ -178,6 +184,14 @@ function buildForwardAprOutputs(
 
   if (apy != null) {
     outputs.push({ ...base, address, component: 'apy', value: apy })
+  }
+
+  if (netAPR != null) {
+    outputs.push({ ...base, address, component: 'netAPR', value: netAPR })
+  }
+
+  if (netAPY != null) {
+    outputs.push({ ...base, address, component: 'netAPY', value: netAPY })
   }
 
   for (const [component, value] of Object.entries(forwardAPR.components)) {
