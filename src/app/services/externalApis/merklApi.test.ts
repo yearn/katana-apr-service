@@ -165,6 +165,163 @@ describe('MerklApiService', () => {
     )
   })
 
+  it('combines Yearn vault reward opportunities from log processor and mapping types', async () => {
+    const vaultAddress = '0x93Fec6639717b6215A48E5a72a162C50DCC40d68'
+    const duplicateCampaignId = 'campaign-log'
+    const mappingCampaignId = 'campaign-mapping'
+    const blacklistedCampaignId =
+      '0xc5a22d022154d5c64ff14b2f4071f134eb83cf159f9f846ad0ba0908a755e86d'
+
+    mocks.fetchGet
+      .mockImplementationOnce(() =>
+        makeOkResponse([
+          {
+            chainId: 747474,
+            name: 'Yearn ERC20 log processor reward',
+            tvl: 1_000_000,
+            status: 'LIVE',
+            type: 'ERC20LOGPROCESSOR',
+            identifier: vaultAddress,
+            campaigns: [
+              {
+                campaignId: duplicateCampaignId,
+                amount: '1',
+                rewardToken: {
+                  address: '0x6E9C1F88a960fE63387eb4b71BC525a9313d8461',
+                  symbol: 'KAT',
+                  decimals: 18,
+                  price: 1,
+                },
+                startTimestamp: 0,
+                endTimestamp: 0,
+              },
+            ],
+            aprRecord: {
+              breakdowns: [{ identifier: duplicateCampaignId, value: 1.5 }],
+            },
+          },
+        ]),
+      )
+      .mockImplementationOnce(() =>
+        makeOkResponse([
+          {
+            id: '166629803376662999264',
+            chainId: 747474,
+            name: 'Yearn ERC20 mapping reward',
+            tvl: 1_000_000,
+            status: 'LIVE',
+            type: 'ERC20_MAPPING',
+            identifier: vaultAddress,
+            campaigns: [
+              {
+                campaignId: duplicateCampaignId,
+                amount: '1',
+                rewardToken: {
+                  address: '0x6E9C1F88a960fE63387eb4b71BC525a9313d8461',
+                  symbol: 'KAT',
+                  decimals: 18,
+                  price: 1,
+                },
+                startTimestamp: 0,
+                endTimestamp: 0,
+              },
+              {
+                campaignId: mappingCampaignId,
+                amount: '1',
+                rewardToken: {
+                  address: '0x6E9C1F88a960fE63387eb4b71BC525a9313d8461',
+                  symbol: 'KAT',
+                  decimals: 18,
+                  price: 1,
+                },
+                startTimestamp: 0,
+                endTimestamp: 0,
+              },
+              {
+                campaignId: blacklistedCampaignId,
+                amount: '1',
+                rewardToken: {
+                  address: '0x6E9C1F88a960fE63387eb4b71BC525a9313d8461',
+                  symbol: 'KAT',
+                  decimals: 18,
+                  price: 1,
+                },
+                startTimestamp: 0,
+                endTimestamp: 0,
+              },
+            ],
+            aprRecord: {
+              breakdowns: [
+                { identifier: duplicateCampaignId, value: 1.5 },
+                { identifier: mappingCampaignId, value: 2.25 },
+                { identifier: blacklistedCampaignId, value: 99 },
+              ],
+            },
+          },
+        ]),
+      )
+
+    const service = new MerklApiService('https://merkl-proxy.internal')
+    const opportunities = await service.getYearnVaultRewardOpportunities()
+
+    expect(mocks.fetchGet).toHaveBeenCalledTimes(2)
+    expect(mocks.fetchGet).toHaveBeenNthCalledWith(
+      1,
+      expect.stringMatching(/\/v4\/opportunities\?.*type=ERC20LOGPROCESSOR/),
+    )
+    expect(mocks.fetchGet).toHaveBeenNthCalledWith(
+      2,
+      expect.stringMatching(/\/v4\/opportunities\?.*type=ERC20_MAPPING/),
+    )
+    expect(opportunities).toHaveLength(1)
+    expect(
+      opportunities[0].campaigns?.map((campaign) => campaign.campaignId),
+    ).toEqual([duplicateCampaignId, mappingCampaignId])
+    expect(
+      opportunities[0].aprRecord?.breakdowns?.map(
+        (breakdown) => breakdown.identifier,
+      ),
+    ).toContain(mappingCampaignId)
+    expect(mocks.logVaultAprDebug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stage: 'blacklist_filter',
+        vaultAddress,
+        blacklistedCampaignIds: [blacklistedCampaignId],
+        blacklistedAprBreakdownCampaignIds: [blacklistedCampaignId],
+      }),
+    )
+  })
+
+  it('keeps log processor opportunities when mapping opportunities fail', async () => {
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined)
+    const logProcessorOpportunity = {
+      chainId: 747474,
+      name: 'Yearn ERC20 log processor reward',
+      tvl: 1_000_000,
+      status: 'LIVE',
+      type: 'ERC20LOGPROCESSOR',
+      identifier: '0x93Fec6639717b6215A48E5a72a162C50DCC40d68',
+      campaigns: [],
+    }
+
+    mocks.fetchGet
+      .mockImplementationOnce(() => makeOkResponse([logProcessorOpportunity]))
+      .mockImplementationOnce(() => makeErrorResponse(500))
+
+    const service = new MerklApiService('https://merkl-proxy.internal')
+    const opportunities = await service.getYearnVaultRewardOpportunities()
+
+    expect(opportunities).toEqual([logProcessorOpportunity])
+    expect(consoleError).toHaveBeenCalledWith(
+      'Error fetching ERC20_MAPPING opportunities:',
+      expect.any(Error),
+    )
+
+    consoleError.mockRestore()
+  })
+
   it('logs when a blacklist removes the active APR-breakdown campaign', async () => {
     const vaultAddress = '0x93Fec6639717b6215A48E5a72a162C50DCC40d68'
     const blacklistedCampaignId =
