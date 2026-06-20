@@ -26,8 +26,29 @@ const extractAddressFromIdentifier = (
 }
 
 const MERKL_PAGE_SIZE = 100
+const YEARN_VAULT_REWARD_OPPORTUNITY_TYPES = [
+  'ERC20LOGPROCESSOR',
+  'ERC20_MAPPING',
+] as const
 
 const normalizeApiUrl = (apiUrl: string): string => apiUrl.replace(/\/+$/, '')
+
+type MerklCampaign = NonNullable<MerklOpportunity['campaigns']>[number]
+type MerklAprBreakdown = NonNullable<
+  NonNullable<MerklOpportunity['aprRecord']>['breakdowns']
+>[number]
+
+const getCampaignKey = (campaign: MerklCampaign): string =>
+  campaign.campaignId?.toLowerCase() ||
+  [
+    campaign.rewardToken.address.toLowerCase(),
+    campaign.amount,
+    campaign.startTimestamp,
+    campaign.endTimestamp,
+  ].join('|')
+
+const getAprBreakdownKey = (breakdown: MerklAprBreakdown): string =>
+  breakdown.identifier?.toLowerCase() || String(breakdown.value)
 
 export class MerklApiService {
   private apiUrls: string[]
@@ -106,6 +127,71 @@ export class MerklApiService {
     return Array.isArray(responseData)
       ? responseData
       : responseData.opportunities || []
+  }
+
+  private mergeOpportunities(
+    opportunities: MerklOpportunity[],
+  ): MerklOpportunity[] {
+    const mergedOpportunities = new Map<string, MerklOpportunity>()
+
+    for (const opportunity of opportunities) {
+      const key = opportunity.identifier.toLowerCase()
+      const existingOpportunity = mergedOpportunities.get(key)
+
+      if (!existingOpportunity) {
+        const copiedOpportunity: MerklOpportunity = {
+          ...opportunity,
+          campaigns: opportunity.campaigns ? [...opportunity.campaigns] : [],
+        }
+
+        if (opportunity.aprRecord) {
+          copiedOpportunity.aprRecord = {
+            ...opportunity.aprRecord,
+            breakdowns: opportunity.aprRecord?.breakdowns
+              ? [...opportunity.aprRecord.breakdowns]
+              : [],
+          }
+        }
+
+        mergedOpportunities.set(key, copiedOpportunity)
+        continue
+      }
+
+      const campaignKeys = new Set(
+        existingOpportunity.campaigns?.map(getCampaignKey) || [],
+      )
+      const additionalCampaigns = opportunity.campaigns?.filter((campaign) => {
+        const campaignKey = getCampaignKey(campaign)
+        if (campaignKeys.has(campaignKey)) {
+          return false
+        }
+        campaignKeys.add(campaignKey)
+        return true
+      }) || []
+
+      const existingBreakdowns = existingOpportunity.aprRecord?.breakdowns || []
+      const breakdownKeys = new Set(existingBreakdowns.map(getAprBreakdownKey))
+      const additionalBreakdowns =
+        opportunity.aprRecord?.breakdowns?.filter((breakdown) => {
+          const breakdownKey = getAprBreakdownKey(breakdown)
+          if (breakdownKeys.has(breakdownKey)) {
+            return false
+          }
+          breakdownKeys.add(breakdownKey)
+          return true
+        }) || []
+
+      existingOpportunity.campaigns = [
+        ...(existingOpportunity.campaigns || []),
+        ...additionalCampaigns,
+      ]
+      existingOpportunity.aprRecord = {
+        ...existingOpportunity.aprRecord,
+        breakdowns: [...existingBreakdowns, ...additionalBreakdowns],
+      }
+    }
+
+    return [...mergedOpportunities.values()]
   }
 
   private describeRequestError(error: unknown): string {
@@ -287,6 +373,58 @@ export class MerklApiService {
       return filteredOpportunities
     } catch (error) {
       console.error('Error fetching ERC20 Log Processor opportunities:', error)
+      return []
+    }
+  }
+
+  async getYearnVaultRewardOpportunities(): Promise<MerklOpportunity[]> {
+    try {
+      const opportunityResults = await Promise.all(
+        YEARN_VAULT_REWARD_OPPORTUNITY_TYPES.map(async (type) => {
+          try {
+            const params = {
+              status: 'LIVE',
+              chainId: config.katanaChainId,
+              type,
+              campaigns: true,
+            }
+
+            return await this.fetchOpportunities(params)
+          } catch (error) {
+            console.error(`Error fetching ${type} opportunities:`, error)
+            return []
+          }
+        }),
+      )
+
+      const filteredOpportunities = this.filterCampaigns(
+        opportunityResults.flat(),
+      )
+      const mergedOpportunities = this.mergeOpportunities(filteredOpportunities)
+
+      for (const opportunity of mergedOpportunities) {
+        const vaultAddress = extractAddressFromIdentifier(
+          opportunity.identifier,
+        )
+        if (!vaultAddress) {
+          continue
+        }
+
+        logVaultAprDebug({
+          stage: 'opportunity_fetch',
+          vaultAddress,
+          poolType: 'yearn',
+          opportunityType: YEARN_VAULT_REWARD_OPPORTUNITY_TYPES.join(','),
+          opportunityIdentifier: opportunity.identifier,
+          opportunitiesTotal: mergedOpportunities.length,
+          campaignsTotal: opportunity.campaigns?.length || 0,
+          reason: 'merkl_opportunity_loaded',
+        })
+      }
+
+      return mergedOpportunities
+    } catch (error) {
+      console.error('Error fetching Yearn vault reward opportunities:', error)
       return []
     }
   }

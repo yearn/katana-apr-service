@@ -57,7 +57,7 @@ describe('YearnApiService', () => {
           name: 'vbUSDC yVault',
           symbol: 'yvvbUSDC',
           totalAssets: '1000000',
-          totalDebt: '100',
+          totalDebt: '800000',
           asset: {
             address: '0x00000000000000000000000000000000000000cc',
             name: 'Vault Bridge USDC',
@@ -88,7 +88,7 @@ describe('YearnApiService', () => {
               address: '0x00000000000000000000000000000000000000dd',
               name: 'Morpho Strategy',
               status: 'active',
-              currentDebt: '42',
+              currentDebt: '640000',
               totalGain: '2',
               totalLoss: '1',
               lastReport: '123',
@@ -139,12 +139,12 @@ describe('YearnApiService', () => {
         rewardToken: null,
         underlyingContract: null,
         details: {
-          totalDebt: '42',
+          totalDebt: '640000',
           totalGain: '2',
           totalLoss: '1',
           lastReport: 123,
           performanceFee: 0,
-          debtRatio: 4200,
+          debtRatio: 6400,
         },
       },
     ])

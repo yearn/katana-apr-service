@@ -134,17 +134,17 @@ const normalizeShareValue = (
 
 const calculateDebtRatio = (
   strategyDebt: unknown,
-  vaultDebt: unknown,
+  vaultTotalAssets: unknown,
 ): number | undefined => {
   try {
     const debt = BigInt(String(strategyDebt ?? '0'))
-    const totalDebt = BigInt(String(vaultDebt ?? '0'))
-    if (debt <= BigInt(0) || totalDebt <= BigInt(0)) {
+    const totalAssets = BigInt(String(vaultTotalAssets ?? '0'))
+    if (debt <= BigInt(0) || totalAssets <= BigInt(0)) {
       return undefined
     }
 
     return Number(
-      (debt * BigInt(10_000) + totalDebt / BigInt(2)) / totalDebt,
+      (debt * BigInt(10_000) + totalAssets / BigInt(2)) / totalAssets,
     )
   } catch {
     return undefined
@@ -203,7 +203,7 @@ const mapKongCompositionToYearnStrategy = (
     lastReport: toNumber(strategy.lastReport),
     performanceFee: toNumber(strategy.performanceFee),
   }
-  const debtRatio = calculateDebtRatio(totalDebt, snapshot.totalDebt)
+  const debtRatio = calculateDebtRatio(totalDebt, snapshot.totalAssets)
   if (debtRatio !== undefined) {
     details.debtRatio = debtRatio
   }
