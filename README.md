@@ -44,6 +44,14 @@ Response body:
 }
 ```
 
+### Error Monitoring (OpenTelemetry)
+
+Server-side errors and exceptions are exported as OpenTelemetry log records over OTLP/HTTP, using only `@opentelemetry/*` packages (vendor-neutral). Reporting is a no-op until an OTLP endpoint is configured.
+
+- Set `OTEL_EXPORTER_OTLP_ENDPOINT` (and `OTEL_EXPORTER_OTLP_HEADERS` for auth) to enable. Point it at any OTLP backend — Sentry's OTLP endpoint, Grafana, Honeycomb, or an OpenTelemetry Collector.
+
+Init lives in `src/observability.ts`; it is started from `src/instrumentation.ts` and errors are captured in the API route handlers.
+
 ---
 
 This project uses [Next.js](https://nextjs.org) and is ready for deployment on [Vercel](https://vercel.com/).

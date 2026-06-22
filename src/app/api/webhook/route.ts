@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createHmac, timingSafeEqual } from 'node:crypto'
+import { captureError, flushObservability } from '../../../observability'
 
 import { DataCacheService } from '../../services/dataCache'
 import type { YearnStrategy, YearnVaultExtra } from '../../types/yearn'
@@ -159,6 +160,8 @@ export async function POST(req: NextRequest): Promise<Response> {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     console.error(`Webhook error: ${message}`, { error })
+    captureError(error)
+    await flushObservability()
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
