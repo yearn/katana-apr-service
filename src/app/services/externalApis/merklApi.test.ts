@@ -79,6 +79,51 @@ describe('MerklApiService', () => {
     consoleWarn.mockRestore()
   })
 
+  it('sends the Merkl API key header on primary and fallback requests', async () => {
+    const consoleWarn = vi
+      .spyOn(console, 'warn')
+      .mockImplementation(() => undefined)
+    const primaryError = Object.assign(
+      new Error('getaddrinfo ENOTFOUND api.merkl.xyz'),
+      { code: 'ENOTFOUND' },
+    )
+
+    mocks.fetchGet
+      .mockRejectedValueOnce(primaryError)
+      .mockImplementationOnce(() => makeOkResponse([]))
+
+    const service = new MerklApiService(config.merklApiUrl, 'merkl-test-key')
+    await service.getYearnOpportunities()
+
+    expect(mocks.fetchGet).toHaveBeenCalledTimes(2)
+    expect(mocks.fetchGet).toHaveBeenNthCalledWith(
+      1,
+      expect.stringMatching(
+        new RegExp(
+          `${config.merklApiUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/v4/opportunities.*items=100.*page=0`,
+        ),
+      ),
+      {
+        headers: {
+          'X-API-Key': 'merkl-test-key',
+        },
+      },
+    )
+    expect(mocks.fetchGet).toHaveBeenNthCalledWith(
+      2,
+      expect.stringMatching(
+        /https:\/\/api\.merkl\.fr\/v4\/opportunities.*items=100.*page=0/,
+      ),
+      {
+        headers: {
+          'X-API-Key': 'merkl-test-key',
+        },
+      },
+    )
+
+    consoleWarn.mockRestore()
+  })
+
   it('does not fall back when a custom Merkl base URI is configured', async () => {
     const consoleWarn = vi
       .spyOn(console, 'warn')

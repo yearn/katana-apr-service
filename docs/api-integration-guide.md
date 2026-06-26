@@ -71,6 +71,11 @@ Base URL (default):
 
 - `https://api.merkl.xyz`
 
+Authentication:
+
+- Set `MERKL_API_KEY` to send Merkl's required `X-API-Key` header on API calls.
+- Leave it unset only for local unauthenticated testing. Merkl is rate-limiting unauthenticated API calls.
+
 Fallback hosts used by app code when the primary Merkl host is the default domain and that request fails:
 
 - `https://api.merkl.fr`
@@ -103,13 +108,13 @@ Examples:
 
 ```bash
 # Core query used by this service
-curl -sS 'https://api.merkl.xyz/v4/opportunities?chainId=747474&type=ERC20LOGPROCESSOR&status=LIVE&campaigns=true'
+curl -sS -H "X-API-Key: $MERKL_API_KEY" 'https://api.merkl.xyz/v4/opportunities?chainId=747474&type=ERC20LOGPROCESSOR&status=LIVE&campaigns=true'
 
 # Find one opportunity by identifier (vault address)
-curl -sS 'https://api.merkl.xyz/v4/opportunities/?chainId=747474&type=ERC20LOGPROCESSOR&status=LIVE&campaigns=true&identifier=0x80c34BD3A3569E126e7055831036aa7b212cB159'
+curl -sS -H "X-API-Key: $MERKL_API_KEY" 'https://api.merkl.xyz/v4/opportunities/?chainId=747474&type=ERC20LOGPROCESSOR&status=LIVE&campaigns=true&identifier=0x80c34BD3A3569E126e7055831036aa7b212cB159'
 
 # Find opportunities containing a specific campaign
-curl -sS 'https://api.merkl.xyz/v4/opportunities/?chainId=747474&type=ERC20LOGPROCESSOR&status=LIVE&campaigns=true&campaignId=0xc5a22d022154d5c64ff14b2f4071f134eb83cf159f9f846ad0ba0908a755e86d'
+curl -sS -H "X-API-Key: $MERKL_API_KEY" 'https://api.merkl.xyz/v4/opportunities/?chainId=747474&type=ERC20LOGPROCESSOR&status=LIVE&campaigns=true&campaignId=0xc5a22d022154d5c64ff14b2f4071f134eb83cf159f9f846ad0ba0908a755e86d'
 ```
 
 ### KAT price resolution utility
@@ -255,7 +260,7 @@ Snippet:
 Query:
 
 ```bash
-curl -sS 'https://api.merkl.xyz/v4/opportunities/?chainId=747474&type=ERC20LOGPROCESSOR&status=LIVE&campaigns=true&identifier=0x80c34BD3A3569E126e7055831036aa7b212cB159'
+curl -sS -H "X-API-Key: $MERKL_API_KEY" 'https://api.merkl.xyz/v4/opportunities/?chainId=747474&type=ERC20LOGPROCESSOR&status=LIVE&campaigns=true&identifier=0x80c34BD3A3569E126e7055831036aa7b212cB159'
 ```
 
 Snippet:
@@ -280,7 +285,7 @@ Snippet:
 Query:
 
 ```bash
-curl -sS 'https://api.merkl.xyz/v4/opportunities/?chainId=747474&type=ERC20LOGPROCESSOR&status=LIVE&campaigns=true&identifier=0x78EC25FBa1bAf6b7dc097Ebb8115A390A2a4Ee12'
+curl -sS -H "X-API-Key: $MERKL_API_KEY" 'https://api.merkl.xyz/v4/opportunities/?chainId=747474&type=ERC20LOGPROCESSOR&status=LIVE&campaigns=true&identifier=0x78EC25FBa1bAf6b7dc097Ebb8115A390A2a4Ee12'
 ```
 
 Snippet:
@@ -308,7 +313,7 @@ Snippet:
 Query:
 
 ```bash
-curl -sS 'https://api.merkl.xyz/v4/opportunities/?chainId=747474&type=ERC20LOGPROCESSOR&status=LIVE&campaigns=true&campaignId=0xc5a22d022154d5c64ff14b2f4071f134eb83cf159f9f846ad0ba0908a755e86d'
+curl -sS -H "X-API-Key: $MERKL_API_KEY" 'https://api.merkl.xyz/v4/opportunities/?chainId=747474&type=ERC20LOGPROCESSOR&status=LIVE&campaigns=true&campaignId=0xc5a22d022154d5c64ff14b2f4071f134eb83cf159f9f846ad0ba0908a755e86d'
 ```
 
 Snippet:
