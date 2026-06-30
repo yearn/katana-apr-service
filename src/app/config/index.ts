@@ -23,6 +23,7 @@ export const config = {
   kongApiUrl: process.env.KONG_BASE_URI || 'https://kong.yearn.fi/api/rest',
   yDaemonApiUrl: process.env.YDAEMON_BASE_URI || 'https://ydaemon.yearn.fi',
   merklApiUrl: process.env.MERKL_BASE_URI || 'https://api.merkl.xyz',
+  merklApiKey: process.env.MERKL_API_KEY?.trim() || undefined,
   coingeckoApiUrl:
     process.env.COINGECKO_BASE_URI || 'https://api.coingecko.com/api/v3',
   coingeckoApiKey: process.env.COINGECKO_API_KEY,

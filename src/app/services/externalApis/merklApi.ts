@@ -52,13 +52,25 @@ const getAprBreakdownKey = (breakdown: MerklAprBreakdown): string =>
 
 export class MerklApiService {
   private apiUrls: string[]
+  private requestInit?: RequestInit
 
-  constructor(apiUrl: string = config.merklApiUrl) {
+  constructor(
+    apiUrl: string = config.merklApiUrl,
+    apiKey: string | undefined = config.merklApiKey,
+  ) {
     const primaryApiUrl = normalizeApiUrl(apiUrl)
+    const merklApiKey = apiKey?.trim()
     this.apiUrls =
       primaryApiUrl === DEFAULT_MERKL_API_URL
         ? Array.from(new Set([primaryApiUrl, ...MERKL_FALLBACK_URLS]))
         : [primaryApiUrl]
+    this.requestInit = merklApiKey
+      ? {
+          headers: {
+            'X-API-Key': merklApiKey,
+          },
+        }
+      : undefined
   }
 
   private filterCampaigns(
@@ -233,9 +245,10 @@ export class MerklApiService {
               page,
             }).map(([k, v]) => [k, String(v)]),
           )
-          const response = await fetch(
-            `${apiUrl}/v4/opportunities?${searchParams}`,
-          )
+          const requestUrl = `${apiUrl}/v4/opportunities?${searchParams}`
+          const response = this.requestInit
+            ? await fetch(requestUrl, this.requestInit)
+            : await fetch(requestUrl)
 
           if (!response.ok) {
             const httpError = Object.assign(
