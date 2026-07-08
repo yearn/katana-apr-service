@@ -122,6 +122,16 @@ describe('YearnApiService', () => {
           weekAgo: 0.99,
           monthAgo: 0.98,
         },
+        forwardAPR: {
+          type: 'katana-estimated-apr',
+          apr: null,
+          apy: null,
+          grossAPR: null,
+          grossAPY: null,
+          netAPR: null,
+          netAPY: null,
+          components: {},
+        },
       },
       tvl: {
         totalAssets: '1000000',
@@ -155,5 +165,109 @@ describe('YearnApiService', () => {
         reason: 'fetched_from_kong',
       }),
     )
+    expect(vaults[0].apr?.forwardAPR).not.toHaveProperty('composite')
+  })
+
+  it('preserves Kong strategy oracle and estimated performance fields', async () => {
+    mocks.fetchGet.mockImplementation((url: string) => {
+      if (
+        url.endsWith(
+          '/snapshot/747474/0x00000000000000000000000000000000000000aa',
+        )
+      ) {
+        return makeOkResponse({
+          chainId: 747474,
+          address: '0x00000000000000000000000000000000000000aa',
+          name: 'vbUSDC yVault',
+          symbol: 'yvvbUSDC',
+          decimals: '6',
+          totalAssets: '1000000',
+          asset: {
+            address: '0x00000000000000000000000000000000000000cc',
+            name: 'Vault Bridge USDC',
+            symbol: 'vbUSDC',
+            decimals: '6',
+          },
+          apy: {
+            net: 0.03,
+            monthlyNet: 0.01,
+            pricePerShare: '1000000',
+          },
+          performance: {
+            oracle: {
+              netAPR: 0.99,
+            },
+            historical: {
+              net: 0.04,
+              monthlyNet: 0.02,
+            },
+          },
+          tvl: {
+            close: 100,
+          },
+          composition: [
+            {
+              address: '0x00000000000000000000000000000000000000dd',
+              name: 'Steer Strategy',
+              status: 'active',
+              currentDebt: '640000',
+              performance: {
+                oracle: {
+                  apr: '0.11',
+                  apy: '0.12',
+                  source: 'kong-oracle',
+                },
+                estimated: {
+                  apr: '0.01',
+                  apy: '0.011',
+                  grossAPR: '0.13',
+                  grossAPY: '0.14',
+                  netAPR: '0.10',
+                  netAPY: '0.105',
+                  components: {
+                    oracleAPY: '0.12',
+                    katRewardsAPR: '0.05',
+                    empty: null,
+                  },
+                },
+              },
+            },
+          ],
+        })
+      }
+
+      throw new Error(`Unexpected fetch URL: ${url}`)
+    })
+
+    const service = new YearnApiService()
+    const vault = await service.getVaultByAddress(
+      '0x00000000000000000000000000000000000000aa',
+      config.katanaChainId,
+    )
+
+    expect(vault?.apr?.netAPR).toBe(0.01)
+    expect(vault?.apr?.netAPR).not.toBe(0.99)
+    expect(vault?.strategies[0]).toMatchObject({
+      oracleAPR: 0.11,
+      oracleAPY: 0.12,
+      oracleSource: 'kong-oracle',
+      estimatedAPR: 0.01,
+      estimatedAPY: 0.011,
+      estimatedGrossAPR: 0.13,
+      estimatedGrossAPY: 0.14,
+      estimatedNetAPR: 0.1,
+      estimatedNetAPY: 0.105,
+      estimatedComponents: {
+        oracleAPY: 0.12,
+        katRewardsAPR: 0.05,
+        empty: null,
+      },
+      strategyRewardsAPR: 0.05,
+      rewardToken: {
+        address: '0x7F1f4b4b29f5058fA32CC7a97141b8D7e5ABDC2d',
+        symbol: 'KAT',
+        decimals: 18,
+      },
+    })
   })
 })

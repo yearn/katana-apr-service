@@ -30,7 +30,18 @@ type KongVaultCompositionItem = {
   performanceFee?: string | number
   latestReportApr?: number | null
   performance?: {
+    oracle?: {
+      apr?: number | string | null
+      apy?: number | string | null
+      source?: string | null
+    }
     estimated?: {
+      apr?: number | string | null
+      apy?: number | string | null
+      grossAPR?: number | string | null
+      grossAPY?: number | string | null
+      netAPR?: number | string | null
+      netAPY?: number | string | null
       components?: Record<string, number | string | null>
     }
   }
@@ -165,6 +176,21 @@ const toPositiveFiniteNumberOrNull = (value: unknown): number | null => {
   return parsed && parsed > 0 ? parsed : null
 }
 
+const mapNullableNumberRecord = (
+  record?: Record<string, number | string | null>,
+): Record<string, number | null> | undefined => {
+  if (!record) {
+    return undefined
+  }
+
+  return Object.fromEntries(
+    Object.entries(record).map(([key, value]) => [
+      key,
+      toFiniteNumberOrNull(value),
+    ]),
+  )
+}
+
 const isKatanaYearnVault = (vault: KongVaultListItem): boolean =>
   vault.origin === 'yearn' && vault.inclusion?.isKatana === true
 
@@ -193,8 +219,11 @@ const mapKongCompositionToYearnStrategy = (
   }
 
   const totalDebt = toStringValue(strategy.currentDebt ?? strategy.totalDebt)
+  const oracle = strategy.performance?.oracle
+  const estimated = strategy.performance?.estimated
+  const estimatedComponents = mapNullableNumberRecord(estimated?.components)
   const estimatedKatRewardsAPR = toFiniteNumberOrNull(
-    strategy.performance?.estimated?.components?.katRewardsAPR,
+    estimatedComponents?.katRewardsAPR,
   )
   const details: YearnStrategyDetails = {
     totalDebt,
@@ -213,6 +242,24 @@ const mapKongCompositionToYearnStrategy = (
     name: strategy.name || 'Unknown',
     status: totalDebt === '0' ? 'unallocated' : strategy.status,
     netAPR: toPositiveFiniteNumberOrNull(strategy.latestReportApr),
+    ...(oracle
+      ? {
+          oracleAPR: toFiniteNumberOrNull(oracle.apr),
+          oracleAPY: toFiniteNumberOrNull(oracle.apy),
+          oracleSource: oracle.source ?? null,
+        }
+      : {}),
+    ...(estimated
+      ? {
+          estimatedAPR: toFiniteNumberOrNull(estimated.apr),
+          estimatedAPY: toFiniteNumberOrNull(estimated.apy),
+          estimatedGrossAPR: toFiniteNumberOrNull(estimated.grossAPR),
+          estimatedGrossAPY: toFiniteNumberOrNull(estimated.grossAPY),
+          estimatedNetAPR: toFiniteNumberOrNull(estimated.netAPR),
+          estimatedNetAPY: toFiniteNumberOrNull(estimated.netAPY),
+          ...(estimatedComponents ? { estimatedComponents } : {}),
+        }
+      : {}),
     strategyRewardsAPR: estimatedKatRewardsAPR,
     rewardToken:
       estimatedKatRewardsAPR !== null && estimatedKatRewardsAPR > 0
@@ -264,16 +311,14 @@ const mapKongAprToYearnApr = (snapshot: KongVaultSnapshot): YearnVaultAPY => {
       ),
     },
     forwardAPR: {
-      type: '',
+      type: 'katana-estimated-apr',
+      apr: null,
+      apy: null,
+      grossAPR: null,
+      grossAPY: null,
       netAPR: null,
-      composite: {
-        boost: null,
-        poolAPY: null,
-        boostedAPR: null,
-        baseAPR: null,
-        cvxAPR: null,
-        rewardsAPR: null,
-      },
+      netAPY: null,
+      components: {},
     },
   }
 }
