@@ -5,6 +5,10 @@ import { YearnApiService } from './externalApis/yearnApi'
 import { MorphoAprCalculator } from './aprCalcs/morphoAprCalculator'
 import { SushiAprCalculator } from './aprCalcs/sushiAprCalculator'
 import { YearnAprCalculator } from './aprCalcs/yearnAprCalculator'
+import {
+  ForwardAprCalculator,
+  type VaultForwardEstimate,
+} from './aprCalcs/forwardAprCalculator'
 import { logVaultAprDebug } from './aprCalcs/debugLogger'
 import {
   type RewardCalculatorResult,
@@ -37,12 +41,14 @@ export class DataCacheService {
   private yearnAprCalculator: YearnAprCalculator
   private morphoAprCalculator: MorphoAprCalculator
   private sushiAprCalculator: SushiAprCalculator
+  private forwardAprCalculator: ForwardAprCalculator
 
   constructor() {
     this.yearnApi = new YearnApiService()
     this.yearnAprCalculator = new YearnAprCalculator()
     this.morphoAprCalculator = new MorphoAprCalculator()
     this.sushiAprCalculator = new SushiAprCalculator()
+    this.forwardAprCalculator = new ForwardAprCalculator()
   }
 
   async generateVaultAPRData(): Promise<APRDataCache> {
@@ -63,10 +69,12 @@ export class DataCacheService {
       yearnAPRs,
       morphoAPRs,
       sushiAPRs,
+      forwardAPRs,
     ] = await Promise.all([
       this.yearnAprCalculator.calculateVaultAPRs(vaults),
       this.morphoAprCalculator.calculateVaultAPRs(vaults),
       this.sushiAprCalculator.calculateVaultAPRs(vaults),
+      this.forwardAprCalculator.calculateVaultForwardAPRs(vaults),
     ])
 
     // Aggregate results for each vault
@@ -82,7 +90,9 @@ export class DataCacheService {
             .compact()
             .value()
 
-          if (allResults.length === 0) {
+          const forwardEstimate = forwardAPRs[vault.address]
+
+          if (allResults.length === 0 && !forwardEstimate) {
             logVaultAprDebug({
               stage: 'fallback',
               vaultAddress: vault.address,
@@ -112,7 +122,7 @@ export class DataCacheService {
 
           return [
             vault.address,
-            this.aggregateVaultResults(vault, allResults),
+            this.aggregateVaultResults(vault, allResults, forwardEstimate),
           ]
         } catch (error) {
           console.error(`Error processing vault ${vault.address}:`, error)
@@ -155,6 +165,7 @@ export class DataCacheService {
   private aggregateVaultResults(
     vault: YearnVault,
     results: VaultRewardCalculatorResult[],
+    forwardEstimate?: VaultForwardEstimate,
   ): YearnVault {
     const strategyResults = results.filter(
       (result): result is RewardCalculatorResult => 'strategyAddress' in result,
@@ -165,6 +176,9 @@ export class DataCacheService {
 
     const strategiesWithRewards = (vault.strategies || []).map((strategy) => {
       const strategyAddress = this.normalizeAddress(strategy.address)
+      const strategyForwardEstimate = strategyAddress
+        ? forwardEstimate?.strategies[strategyAddress]
+        : undefined
       const strategyRewards = strategyAddress
         ? strategyRewardsByAddress[strategyAddress]
         : undefined
@@ -176,6 +190,17 @@ export class DataCacheService {
 
       return {
         ...strategy,
+        ...(strategyForwardEstimate
+          ? {
+              estimatedAPR: strategyForwardEstimate.estimatedAPR,
+              estimatedAPY: strategyForwardEstimate.estimatedAPY,
+              estimatedGrossAPR: strategyForwardEstimate.estimatedGrossAPR,
+              estimatedGrossAPY: strategyForwardEstimate.estimatedGrossAPY,
+              estimatedNetAPR: strategyForwardEstimate.estimatedNetAPR,
+              estimatedNetAPY: strategyForwardEstimate.estimatedNetAPY,
+              estimatedComponents: strategyForwardEstimate.estimatedComponents,
+            }
+          : {}),
         ...(strategyRewards
           ? {
               strategyRewardsAPR,
@@ -217,6 +242,11 @@ export class DataCacheService {
 
     const apr = {
       ...vault.apr,
+      ...(forwardEstimate
+        ? {
+            forwardAPR: forwardEstimate.forwardAPR,
+          }
+        : {}),
       extra: {
         ...(vault.apr?.extra || {}),
         stakingRewardsAPR: null,

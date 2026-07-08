@@ -49,6 +49,7 @@ export interface Campaign {
 export interface Opportunity {
   name: string
   identifier: string
+  type?: string
   campaigns?: Campaign[]
   apr?: number
   aprRecord?: {

@@ -2,7 +2,6 @@ export interface MerklRewardToken {
   address: string
   symbol: string
   decimals: number
-  price: number
 }
 
 export interface MerklCampaign {
@@ -35,7 +34,6 @@ export interface MerklOpportunity {
     address: string
     symbol: string
     decimals: number
-    price: number
   }>
 }
 

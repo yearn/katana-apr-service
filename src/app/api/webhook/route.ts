@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 
 import { DataCacheService } from '../../services/dataCache'
-import type { YearnStrategy, YearnVaultExtra } from '../../types/yearn'
+import type {
+  YearnStrategy,
+  YearnVaultAPY,
+  YearnVaultExtra,
+} from '../../types/yearn'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,6 +37,14 @@ interface ParsedWebhookBody {
 }
 
 const STRATEGY_APR_COMPONENT = 'katRewardsAPR'
+const FORWARD_APR_FIELDS = [
+  'apr',
+  'apy',
+  'grossAPR',
+  'grossAPY',
+  'netAPR',
+  'netAPY',
+] as const
 
 function verifyWebhookSignature(
   signatureHeader: string,
@@ -98,21 +110,77 @@ function buildStrategyOutputs(
 ): KongOutput[] {
   return strategies.flatMap((strategy) => {
     const address = strategy.address
-    const value = toFiniteNumber(strategy.strategyRewardsAPR)
-
-    if (!address || value == null) {
+    if (!address) {
       return []
     }
 
-    return [
-      {
+    const outputs: KongOutput[] = []
+    const katRewardsAPR = toFiniteNumber(strategy.strategyRewardsAPR)
+
+    if (katRewardsAPR != null) {
+      outputs.push({
         ...base,
         address,
         component: STRATEGY_APR_COMPONENT,
-        value,
-      },
+        value: katRewardsAPR,
+      })
+    }
+
+    const strategyEstimateFields: Array<
+      [string, number | null | undefined]
+    > = [
+      ['apr', strategy.estimatedAPR],
+      ['apy', strategy.estimatedAPY],
+      ['grossAPR', strategy.estimatedGrossAPR],
+      ['grossAPY', strategy.estimatedGrossAPY],
+      ['netAPR', strategy.estimatedNetAPR],
+      ['netAPY', strategy.estimatedNetAPY],
     ]
+
+    for (const [component, value] of strategyEstimateFields) {
+      const finiteValue = toFiniteNumber(value)
+      if (finiteValue != null) {
+        outputs.push({ ...base, address, component, value: finiteValue })
+      }
+    }
+
+    for (const [component, value] of Object.entries(
+      strategy.estimatedComponents || {},
+    )) {
+      const finiteValue = toFiniteNumber(value)
+      if (finiteValue != null) {
+        outputs.push({ ...base, address, component, value: finiteValue })
+      }
+    }
+
+    return outputs
   })
+}
+
+function buildForwardOutputs(
+  address: string,
+  forwardAPR: NonNullable<YearnVaultAPY['forwardAPR']>,
+  base: Omit<KongOutput, 'address' | 'component' | 'value'>,
+): KongOutput[] {
+  const outputs: KongOutput[] = []
+
+  for (const component of FORWARD_APR_FIELDS) {
+    const value = toFiniteNumber(forwardAPR[component])
+    if (value != null) {
+      outputs.push({ ...base, address, component, value })
+    }
+  }
+
+  for (const [component, value] of Object.entries(
+    forwardAPR.components || {},
+  )) {
+    const finiteValue = toFiniteNumber(value)
+    if (finiteValue != null) {
+      outputs.push({ ...base, address, component, value: finiteValue })
+    }
+  }
+
+  return outputs
 }
 
 export async function POST(req: NextRequest): Promise<Response> {
@@ -150,6 +218,10 @@ export async function POST(req: NextRequest): Promise<Response> {
 
       for (const component of COMPONENTS) {
         outputs.push({ ...base, address, component, value: extra[component] ?? 0 })
+      }
+
+      if (vault.apr?.forwardAPR) {
+        outputs.push(...buildForwardOutputs(address, vault.apr.forwardAPR, base))
       }
 
       outputs.push(...buildStrategyOutputs(vault.strategies || [], base))

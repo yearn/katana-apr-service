@@ -29,7 +29,7 @@ At request time, the service:
 - External APIs:
   - `src/app/services/externalApis/yearnApi.ts`
   - `src/app/services/externalApis/merklApi.ts`
-  - `src/app/services/externalApis/katanaPriceService.ts`
+  - `src/app/services/externalApis/morphoApi.ts`
   - `src/app/services/externalApis/merklBlacklist.ts`
 - APR matching logic:
   - `src/app/services/aprCalcs/yearnAprCalculator.ts`
@@ -117,22 +117,6 @@ curl -sS -H "X-API-Key: $MERKL_API_KEY" 'https://api.merkl.xyz/v4/opportunities/
 curl -sS -H "X-API-Key: $MERKL_API_KEY" 'https://api.merkl.xyz/v4/opportunities/?chainId=747474&type=ERC20LOGPROCESSOR&status=LIVE&campaigns=true&campaignId=0xc5a22d022154d5c64ff14b2f4071f134eb83cf159f9f846ad0ba0908a755e86d'
 ```
 
-### KAT price resolution utility
-
-When this repo needs a local KAT token price, it resolves prices in this order:
-
-1. yDaemon `GET /prices/all`
-2. CoinGecko by coin ID `katana-network-token`
-
-Notes:
-
-- yDaemon returns `chainId -> tokenAddress -> priceString`.
-- The yDaemon price strings use 6 decimals, matching the `yearn.fi` frontend path.
-- Wrapped KAT addresses fall back to canonical KAT before returning `0`.
-- KAT price lookups are cached in-process for 60 seconds, with request deduplication across concurrent callers.
-- CoinGecko is only queried when yDaemon cannot return a usable KAT price.
-- If a refresh fails, the service can reuse a stale cached KAT price for up to 5 minutes to reduce pricing disruption and CoinGecko rate-limit risk.
-
 ## End-to-End Pipeline
 
 ### 1) Vault fetch
@@ -195,7 +179,7 @@ APR units:
 - `apr.extra.katanaAppRewardsAPR` from Yearn vault-level rewards
 - `apr.extra.fixedRateKatanaRewards` (legacy compatibility field; fixed-rate KAT rewards have ended and this is always `0`)
 - `apr.extra.katanaBonusAPY` (`0` post-TGE, kept for compatibility)
-- `apr.extra.katanaNativeYield` (`vault.apr.netAPR`, mapped from Kong monthly net APY for yDaemon compatibility)
+- `apr.extra.katanaNativeYield` (`vault.apr.netAPR`, mapped from Kong monthly net APY for legacy response compatibility)
 - `apr.extra.steerPointsPerDollar` (`0`; legacy field kept after the points program ended)
 
 Weighting notes:

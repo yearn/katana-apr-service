@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   mockCalculateYearnVaultAPRs: vi.fn(),
   mockCalculateMorphoVaultAPRs: vi.fn(),
   mockCalculateSushiVaultAPRs: vi.fn(),
+  mockCalculateVaultForwardAPRs: vi.fn(),
   logVaultAprDebug: vi.fn(),
 }))
 
@@ -30,6 +31,12 @@ vi.mock('./aprCalcs/morphoAprCalculator', () => ({
 vi.mock('./aprCalcs/sushiAprCalculator', () => ({
   SushiAprCalculator: vi.fn().mockImplementation(() => ({
     calculateVaultAPRs: mocks.mockCalculateSushiVaultAPRs,
+  })),
+}))
+
+vi.mock('./aprCalcs/forwardAprCalculator', () => ({
+  ForwardAprCalculator: vi.fn().mockImplementation(() => ({
+    calculateVaultForwardAPRs: mocks.mockCalculateVaultForwardAPRs,
   })),
 }))
 
@@ -59,10 +66,12 @@ describe('DataCacheService.generateVaultAPRData', () => {
     mocks.mockCalculateYearnVaultAPRs.mockReset()
     mocks.mockCalculateMorphoVaultAPRs.mockReset()
     mocks.mockCalculateSushiVaultAPRs.mockReset()
+    mocks.mockCalculateVaultForwardAPRs.mockReset()
     mocks.logVaultAprDebug.mockReset()
     mocks.mockCalculateYearnVaultAPRs.mockResolvedValue({})
     mocks.mockCalculateMorphoVaultAPRs.mockResolvedValue({})
     mocks.mockCalculateSushiVaultAPRs.mockResolvedValue({})
+    mocks.mockCalculateVaultForwardAPRs.mockResolvedValue({})
   })
 
   it('returns fallback payload when all calculator results are empty', async () => {
@@ -199,9 +208,6 @@ describe('DataCacheService.generateVaultAPRData', () => {
     expect(aggregatedVault.strategies[0].underlyingContract).toBe(
       '0x00000000000000000000000000000000000000dd',
     )
-    expect(aggregatedVault.strategies[0].rewardToken).not.toHaveProperty(
-      'assumedFDV',
-    )
     expect(aggregatedVault.strategies[1].strategyRewardsAPR).toBe(0.08)
     expect(aggregatedVault.strategies[1].underlyingContract).toBe(
       '0x00000000000000000000000000000000000000ff',
@@ -298,5 +304,79 @@ describe('DataCacheService.generateVaultAPRData', () => {
     expect(data[vault.address].strategies[0].underlyingContract).toBeNull()
     expect(data[vault.address].apr?.extra?.katanaAppRewardsAPR).toBe(0)
     expect(data[vault.address].apr?.extra?.katanaRewardsAPR).toBe(0)
+  })
+
+  it('merges forward APR estimates into vault and strategy output', async () => {
+    const vault = makeVault({
+      tvl: {
+        totalAssets: '100',
+        tvl: 100,
+        price: 1,
+      },
+      strategies: [
+        {
+          address: STRATEGY_ADDRESS,
+          name: 'Morpho Strategy',
+          status: 'active',
+          details: {
+            totalDebt: '50',
+            totalGain: '0',
+            totalLoss: '0',
+            lastReport: 0,
+          },
+        },
+      ],
+    })
+    mocks.mockGetVaults.mockResolvedValue([vault])
+    mocks.mockCalculateVaultForwardAPRs.mockResolvedValue({
+      [vault.address]: {
+        forwardAPR: {
+          type: 'katana-estimated-apr',
+          apr: 0.04,
+          apy: 0.0407,
+          grossAPR: 0.05,
+          grossAPY: 0.0512,
+          netAPR: 0.04,
+          netAPY: 0.0407,
+          components: {
+            morphoBaseAPY: 0.0512,
+            estimatedDebtCoverage: 1,
+          },
+        },
+        strategies: {
+          [STRATEGY_ADDRESS]: {
+            address: STRATEGY_ADDRESS,
+            estimatedAPR: 0.04,
+            estimatedAPY: 0.0407,
+            estimatedGrossAPR: 0.05,
+            estimatedGrossAPY: 0.0512,
+            estimatedNetAPR: 0.04,
+            estimatedNetAPY: 0.0407,
+            estimatedComponents: {
+              morphoBaseAPY: 0.0512,
+            },
+          },
+        },
+      },
+    })
+
+    const service = new DataCacheService()
+    const data = await service.generateVaultAPRData()
+
+    expect(data[vault.address].apr?.forwardAPR).toMatchObject({
+      type: 'katana-estimated-apr',
+      grossAPY: 0.0512,
+      netAPY: 0.0407,
+      components: {
+        estimatedDebtCoverage: 1,
+      },
+    })
+    expect(data[vault.address].strategies[0]).toMatchObject({
+      estimatedGrossAPY: 0.0512,
+      estimatedNetAPY: 0.0407,
+      estimatedComponents: {
+        morphoBaseAPY: 0.0512,
+      },
+    })
   })
 })

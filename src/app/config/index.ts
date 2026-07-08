@@ -21,14 +21,9 @@ export const config = {
   // biome-ignore lint/style/noNonNullAssertion: temp
   rpcUrl: process.env.RPC_URL_KATANA!,
   kongApiUrl: process.env.KONG_BASE_URI || 'https://kong.yearn.fi/api/rest',
-  yDaemonApiUrl: process.env.YDAEMON_BASE_URI || 'https://ydaemon.yearn.fi',
   merklApiUrl: process.env.MERKL_BASE_URI || 'https://api.merkl.xyz',
   merklApiKey: process.env.MERKL_API_KEY?.trim() || undefined,
-  coingeckoApiUrl:
-    process.env.COINGECKO_BASE_URI || 'https://api.coingecko.com/api/v3',
-  coingeckoApiKey: process.env.COINGECKO_API_KEY,
-  coingeckoKatanaCoinId:
-    process.env.COINGECKO_KATANA_COIN_ID || 'katana-network-token',
+  morphoApiUrl: process.env.MORPHO_API_URI || 'https://api.morpho.org/graphql',
   aprDebugEnabled: parseBoolean(process.env.APR_DEBUG_ENABLED),
   aprDebugVaultAddress: process.env.APR_DEBUG_VAULT_ADDRESS?.toLowerCase(),
   aprDebugSampleLimit: parsePositiveInteger(process.env.APR_DEBUG_SAMPLE_LIMIT),

@@ -19,19 +19,3 @@ export const isKatanaRewardTokenAddress = (address?: string): boolean => {
 
   return REWARD_TOKEN_ADDRESS_SET.has(address.toLowerCase())
 }
-
-export const getKatanaPriceLookupAddresses = (
-  tokenAddress: string,
-): string[] => {
-  const normalizedAddress = tokenAddress.toLowerCase()
-  const canonicalAddress = CANONICAL_KAT_ADDRESS.toLowerCase()
-
-  if (
-    !isKatanaRewardTokenAddress(normalizedAddress) ||
-    normalizedAddress === canonicalAddress
-  ) {
-    return [normalizedAddress]
-  }
-
-  return [normalizedAddress, canonicalAddress]
-}

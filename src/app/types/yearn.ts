@@ -11,7 +11,6 @@ export interface YearnRewardToken {
   address: string
   symbol: string
   decimals: number
-  assumedFDV?: number
 }
 
 export interface YearnStrategy {
