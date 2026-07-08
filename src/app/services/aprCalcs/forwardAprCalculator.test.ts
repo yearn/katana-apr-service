@@ -247,4 +247,38 @@ describe('ForwardAprCalculator', () => {
       estimatedNetAPY: 0,
     })
   })
+
+  it('routes Morpho Lender Borrower strategies through the oracle path', async () => {
+    const vault = makeVault({
+      strategies: [
+        {
+          address: MORPHO_STRATEGY,
+          name: 'Morpho vbWBTC/yvUSDT Lender Borrower',
+          oracleAPY: 0,
+          details: {
+            totalDebt: '1000',
+            totalGain: '0',
+            totalLoss: '0',
+            lastReport: 0,
+          },
+        },
+      ],
+    })
+    const calculator = makeCalculator({})
+
+    const estimates = await calculator.calculateVaultForwardAPRs([vault])
+
+    expect(estimates[vault.address].forwardAPR).toMatchObject({
+      grossAPY: 0,
+      netAPY: 0,
+      components: {
+        estimatedDebtCoverage: 1,
+        oracleAPY: 0,
+      },
+    })
+    expect(estimates[vault.address].strategies[MORPHO_STRATEGY]).toMatchObject({
+      estimatedGrossAPY: 0,
+      estimatedNetAPY: 0,
+    })
+  })
 })

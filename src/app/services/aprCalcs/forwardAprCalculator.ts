@@ -200,6 +200,12 @@ const getResolvedMorphoVaultAddress = (
   )
 }
 
+const isMorphoVaultStrategy = (strategy: YearnStrategy): boolean =>
+  Boolean(
+    strategy.name?.includes('Morpho') &&
+      !strategy.name.includes('Lender Borrower'),
+  )
+
 const buildStrategyEstimate = (
   strategy: YearnStrategy,
   grossAPY: number,
@@ -243,7 +249,7 @@ export class ForwardAprCalculator {
     const morphoStrategies = vaults.flatMap((vault) =>
       vault.strategies.filter(
         (strategy) =>
-          strategy.name?.includes('Morpho') &&
+          isMorphoVaultStrategy(strategy) &&
           isPositiveDebt(strategy.details?.totalDebt),
       ),
     )
@@ -323,7 +329,7 @@ export class ForwardAprCalculator {
     let weightedNetAPY = 0
 
     for (const strategy of activeStrategies) {
-      const estimate = strategy.name?.includes('Morpho')
+      const estimate = isMorphoVaultStrategy(strategy)
         ? this.calculateMorphoStrategyEstimate(
             strategy,
             strategyToVault,
