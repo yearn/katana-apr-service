@@ -282,7 +282,7 @@ export class DataCacheService {
       ]),
     )
 
-    const netAPR = (vault.strategies || []).reduce((sum, strategy) => {
+    const grossForwardAPR = (vault.strategies || []).reduce((sum, strategy) => {
       const debtShare = this.getStrategyDebtShare(strategy, vault)
       if (debtShare <= 0) {
         return sum
@@ -296,6 +296,7 @@ export class DataCacheService {
 
       return sum + debtShare * strategyAPR
     }, 0)
+    const netAPR = this.computeNetForwardAPR(grossForwardAPR, vault)
 
     return {
       type: vault.apr?.forwardAPR?.type || '',
@@ -309,6 +310,22 @@ export class DataCacheService {
         rewardsAPR: null,
       },
     }
+  }
+
+  private computeNetForwardAPR(grossAPR: number, vault: YearnVault): number {
+    if (grossAPR <= 0) {
+      return 0
+    }
+
+    const managementFee = this.getFiniteFee(vault.apr?.fees?.management)
+    const performanceFee = this.getFiniteFee(vault.apr?.fees?.performance)
+    const netAPR = (grossAPR - managementFee) * (1 - performanceFee)
+
+    return Math.max(netAPR, grossAPR / 2)
+  }
+
+  private getFiniteFee(value: number | undefined): number {
+    return typeof value === 'number' && Number.isFinite(value) ? value : 0
   }
 
   private getStrategyDebtShare(
