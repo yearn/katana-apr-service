@@ -334,7 +334,7 @@ export class DataCacheService {
   }
 
   private getCurrentStrategyAPR(strategy: YearnStrategy): number {
-    const parsed = this.toFiniteNumber(strategy.netAPR)
+    const parsed = this.toFiniteNumber(strategy.netAPR ?? undefined)
     return parsed > 0 ? parsed : 0
   }
 
