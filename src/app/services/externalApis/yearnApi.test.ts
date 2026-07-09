@@ -13,6 +13,7 @@ vi.mock('../aprCalcs/debugLogger', () => ({
 }))
 
 import { YearnApiService } from './yearnApi'
+import type { YearnVault } from '../../types'
 
 const makeOkResponse = (data: unknown) =>
   Promise.resolve({
@@ -155,5 +156,65 @@ describe('YearnApiService', () => {
         reason: 'fetched_from_kong',
       }),
     )
+  })
+
+  it('selects active Morpho compounders only for replacement APRs', () => {
+    const vault: YearnVault = {
+      address: '0x00000000000000000000000000000000000000aa',
+      symbol: 'yvvbUSDC',
+      name: 'USDC yVault',
+      chainID: 747474,
+      apr: {
+        netAPR: 0,
+      },
+      strategies: [
+        {
+          address: '0x0000000000000000000000000000000000000001',
+          name: 'Morpho Yearn USDC Compounder',
+          details: {
+            totalDebt: '100',
+            totalGain: '0',
+            totalLoss: '0',
+            lastReport: 0,
+          },
+        },
+        {
+          address: '0x0000000000000000000000000000000000000002',
+          name: 'Morpho vbWBTC/yvUSDC Lender Borrower',
+          details: {
+            totalDebt: '100',
+            totalGain: '0',
+            totalLoss: '0',
+            lastReport: 0,
+          },
+        },
+        {
+          address: '0x0000000000000000000000000000000000000003',
+          name: 'Morpho Inactive USDC Compounder',
+          details: {
+            totalDebt: '0',
+            totalGain: '0',
+            totalLoss: '0',
+            lastReport: 0,
+          },
+        },
+        {
+          address: '0x0000000000000000000000000000000000000004',
+          name: 'Steer USDC Compounder',
+          details: {
+            totalDebt: '100',
+            totalGain: '0',
+            totalLoss: '0',
+            lastReport: 0,
+          },
+        },
+      ],
+    }
+
+    const service = new YearnApiService()
+
+    expect(service.getActiveMorphoCompounderStrategies(vault)).toEqual([
+      '0x0000000000000000000000000000000000000001',
+    ])
   })
 })
