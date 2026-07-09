@@ -452,6 +452,50 @@ describe('DataCacheService.generateVaultAPRData', () => {
     expect(data[vault.address].apr?.forwardAPR?.netAPR).toBeCloseTo(0.015)
   })
 
+  it('keeps forward APR unchanged when there are no Morpho replacement results', async () => {
+    const vault = makeVault({
+      apr: {
+        netAPR: 0.02,
+        forwardAPR: {
+          type: '',
+          netAPR: null,
+          composite: {
+            boost: null,
+            poolAPY: null,
+            boostedAPR: null,
+            baseAPR: null,
+            cvxAPR: null,
+            rewardsAPR: null,
+          },
+        },
+      },
+    })
+    mocks.mockGetVaults.mockResolvedValue([vault])
+    mocks.mockCalculateYearnVaultAPRs.mockResolvedValue({
+      [vault.address]: [
+        {
+          vaultName: vault.name,
+          vaultAddress: vault.address,
+          poolType: 'yearn',
+          breakdown: {
+            apr: 10,
+            token: {
+              address: '0x00000000000000000000000000000000000000bb',
+              symbol: 'KAT',
+              decimals: 18,
+            },
+            weight: 0,
+          },
+        },
+      ],
+    })
+
+    const service = new DataCacheService()
+    const data = await service.generateVaultAPRData()
+
+    expect(data[vault.address].apr?.forwardAPR?.netAPR).toBeNull()
+  })
+
   it('floors fee-adjusted forward APR at half of positive gross APR', async () => {
     const morphoStrategyAddress =
       '0x00000000000000000000000000000000000000f5'
