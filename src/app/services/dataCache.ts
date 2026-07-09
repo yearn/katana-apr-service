@@ -1,8 +1,12 @@
 import _ from 'lodash'
 import { config } from '../config/index'
-import type { YearnVault } from '../types/index'
+import type { YearnStrategy, YearnVault, YearnVaultAPY } from '../types/index'
 import { YearnApiService } from './externalApis/yearnApi'
 import { MorphoAprCalculator } from './aprCalcs/morphoAprCalculator'
+import {
+  MorphoUnderlyingAprCalculator,
+  type MorphoUnderlyingAprResult,
+} from './aprCalcs/morphoUnderlyingAprCalculator'
 import { SushiAprCalculator } from './aprCalcs/sushiAprCalculator'
 import { YearnAprCalculator } from './aprCalcs/yearnAprCalculator'
 import { logVaultAprDebug } from './aprCalcs/debugLogger'
@@ -36,12 +40,14 @@ export class DataCacheService {
   private yearnApi: YearnApiService
   private yearnAprCalculator: YearnAprCalculator
   private morphoAprCalculator: MorphoAprCalculator
+  private morphoUnderlyingAprCalculator: MorphoUnderlyingAprCalculator
   private sushiAprCalculator: SushiAprCalculator
 
   constructor() {
     this.yearnApi = new YearnApiService()
     this.yearnAprCalculator = new YearnAprCalculator()
     this.morphoAprCalculator = new MorphoAprCalculator()
+    this.morphoUnderlyingAprCalculator = new MorphoUnderlyingAprCalculator()
     this.sushiAprCalculator = new SushiAprCalculator()
   }
 
@@ -62,10 +68,12 @@ export class DataCacheService {
     const [
       yearnAPRs,
       morphoAPRs,
+      morphoUnderlyingAPRs,
       sushiAPRs,
     ] = await Promise.all([
       this.yearnAprCalculator.calculateVaultAPRs(vaults),
       this.morphoAprCalculator.calculateVaultAPRs(vaults),
+      this.morphoUnderlyingAprCalculator.calculateVaultAPRs(vaults),
       this.sushiAprCalculator.calculateVaultAPRs(vaults),
     ])
 
@@ -81,8 +89,13 @@ export class DataCacheService {
             .flattenDeep()
             .compact()
             .value()
+          const morphoUnderlyingResults =
+            morphoUnderlyingAPRs[vault.address] || []
 
-          if (allResults.length === 0) {
+          if (
+            allResults.length === 0 &&
+            morphoUnderlyingResults.length === 0
+          ) {
             logVaultAprDebug({
               stage: 'fallback',
               vaultAddress: vault.address,
@@ -112,7 +125,11 @@ export class DataCacheService {
 
           return [
             vault.address,
-            this.aggregateVaultResults(vault, allResults),
+            this.aggregateVaultResults(
+              vault,
+              allResults,
+              morphoUnderlyingResults,
+            ),
           ]
         } catch (error) {
           console.error(`Error processing vault ${vault.address}:`, error)
@@ -155,6 +172,7 @@ export class DataCacheService {
   private aggregateVaultResults(
     vault: YearnVault,
     results: VaultRewardCalculatorResult[],
+    morphoUnderlyingResults: MorphoUnderlyingAprResult[] = [],
   ): YearnVault {
     const strategyResults = results.filter(
       (result): result is RewardCalculatorResult => 'strategyAddress' in result,
@@ -214,9 +232,14 @@ export class DataCacheService {
     const vaultKatanaBonusAPY = 0
 
     const katanaNativeYield = vault.apr?.netAPR || 0
+    const forwardAPR = this.buildForwardAPR(
+      vault,
+      morphoUnderlyingResults,
+    )
 
     const apr = {
       ...vault.apr,
+      ...(forwardAPR ? { forwardAPR } : {}),
       extra: {
         ...(vault.apr?.extra || {}),
         stakingRewardsAPR: null,
@@ -242,6 +265,77 @@ export class DataCacheService {
     }
 
     return newVault
+  }
+
+  private buildForwardAPR(
+    vault: YearnVault,
+    morphoUnderlyingResults: MorphoUnderlyingAprResult[],
+  ): YearnVaultAPY['forwardAPR'] | undefined {
+    if (morphoUnderlyingResults.length === 0) {
+      return vault.apr?.forwardAPR
+    }
+
+    const replacementAprByStrategy = new Map(
+      morphoUnderlyingResults.map((result) => [
+        result.strategyAddress.toLowerCase(),
+        result.replacementAPR,
+      ]),
+    )
+
+    const netAPR = (vault.strategies || []).reduce((sum, strategy) => {
+      const debtShare = this.getStrategyDebtShare(strategy, vault)
+      if (debtShare <= 0) {
+        return sum
+      }
+
+      const replacementAPR = replacementAprByStrategy.get(
+        strategy.address.toLowerCase(),
+      )
+      const strategyAPR =
+        replacementAPR ?? this.getCurrentStrategyAPR(strategy)
+
+      return sum + debtShare * strategyAPR
+    }, 0)
+
+    return {
+      type: vault.apr?.forwardAPR?.type || '',
+      netAPR,
+      composite: vault.apr?.forwardAPR?.composite || {
+        boost: null,
+        poolAPY: null,
+        boostedAPR: null,
+        baseAPR: null,
+        cvxAPR: null,
+        rewardsAPR: null,
+      },
+    }
+  }
+
+  private getStrategyDebtShare(
+    strategy: YearnStrategy,
+    vault: YearnVault,
+  ): number {
+    const debtRatio = this.toFiniteNumber(strategy.details?.debtRatio)
+    if (debtRatio > 0) {
+      return debtRatio / 10_000
+    }
+
+    try {
+      const strategyDebt = BigInt(String(strategy.details?.totalDebt ?? '0'))
+      const vaultTotalAssets = BigInt(String(vault.tvl?.totalAssets ?? '0'))
+      if (strategyDebt <= BigInt(0) || vaultTotalAssets <= BigInt(0)) {
+        return 0
+      }
+
+      return Number(strategyDebt) / Number(vaultTotalAssets)
+    } catch {
+      return 0
+    }
+  }
+
+  private getCurrentStrategyAPR(strategy: YearnStrategy): number {
+    const parsed = this.toFiniteNumber(strategy.netAPR ?? undefined)
+    return parsed > 0 ? parsed : 0
   }
 
   private buildStrategyRewardsByAddress(
