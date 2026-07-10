@@ -81,6 +81,7 @@ type KongVaultSnapshot = {
   fees?: {
     managementFee?: number
     performanceFee?: number
+    maxFee?: number
   } | null
   composition?: KongVaultCompositionItem[]
 }
@@ -116,6 +117,7 @@ const toStringValue = (value: unknown, fallback = '0'): string =>
   value === null || value === undefined ? fallback : String(value)
 
 const normalizeBasisPoints = (value: unknown): number => toNumber(value) / 10_000
+const KATANA_ACCOUNTANT_DEFAULT_MAX_FEE_BPS = 5_000
 
 const normalizeShareValue = (
   value: unknown,
@@ -245,6 +247,9 @@ const mapKongAprToYearnApr = (snapshot: KongVaultSnapshot): YearnVaultAPY => {
       ? {
           management: normalizeBasisPoints(snapshot.fees.managementFee),
           performance: normalizeBasisPoints(snapshot.fees.performanceFee),
+          maxFee: normalizeBasisPoints(
+            snapshot.fees.maxFee ?? KATANA_ACCOUNTANT_DEFAULT_MAX_FEE_BPS,
+          ),
         }
       : undefined,
     points: {
