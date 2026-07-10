@@ -52,6 +52,7 @@ export interface YearnVaultPoints {
 export interface YearnVaultFees {
   performance: number
   management: number
+  maxFee?: number
 }
 
 export interface YearnVaultAPY {

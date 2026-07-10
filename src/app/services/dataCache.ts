@@ -36,6 +36,8 @@ interface StrategyRewardSummary {
   underlyingContract?: string
 }
 
+const KATANA_ACCOUNTANT_DEFAULT_MAX_FEE = 0.5
+
 export class DataCacheService {
   private yearnApi: YearnApiService
   private yearnAprCalculator: YearnAprCalculator
@@ -319,13 +321,22 @@ export class DataCacheService {
 
     const managementFee = this.getFiniteFee(vault.apr?.fees?.management)
     const performanceFee = this.getFiniteFee(vault.apr?.fees?.performance)
-    const netAPR = (grossAPR - managementFee) * (1 - performanceFee)
+    const maxFee = this.getFiniteFee(
+      vault.apr?.fees?.maxFee,
+      KATANA_ACCOUNTANT_DEFAULT_MAX_FEE,
+    )
+    const uncappedFees = managementFee + grossAPR * performanceFee
+    const totalFees =
+      maxFee > 0 ? Math.min(uncappedFees, grossAPR * maxFee) : uncappedFees
+    const netAPR = grossAPR - totalFees
 
-    return Math.max(netAPR, grossAPR / 2)
+    return Math.max(netAPR, 0)
   }
 
-  private getFiniteFee(value: number | undefined): number {
-    return typeof value === 'number' && Number.isFinite(value) ? value : 0
+  private getFiniteFee(value: number | undefined, fallback = 0): number {
+    return typeof value === 'number' && Number.isFinite(value)
+      ? value
+      : fallback
   }
 
   private getStrategyDebtShare(
