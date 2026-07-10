@@ -44,6 +44,9 @@ describe('/api/webhook route', () => {
   })
 
   it('returns vault-level components plus strategy-addressed KAT APR rows', async () => {
+    const forwardNetAPR = 0.0789
+    const forwardNetAPY = (1 + forwardNetAPR / 52) ** 52 - 1
+
     mocks.mockGenerateVaultAPRData.mockResolvedValue({
       [VAULT_ADDRESS.toLowerCase()]: {
         address: VAULT_ADDRESS,
@@ -72,6 +75,18 @@ describe('/api/webhook route', () => {
           },
         ],
         apr: {
+          forwardAPR: {
+            type: '',
+            netAPR: forwardNetAPR,
+            composite: {
+              boost: null,
+              poolAPY: null,
+              boostedAPR: null,
+              baseAPR: null,
+              cvxAPR: null,
+              rewardsAPR: null,
+            },
+          },
           extra: {
             katanaAppRewardsAPR: 0.1234,
             fixedRateKatanaRewards: 0,
@@ -145,6 +160,24 @@ describe('/api/webhook route', () => {
       },
       {
         chainId: 747474,
+        address: REQUEST_VAULT_ADDRESS,
+        label: 'katana',
+        component: 'netAPR',
+        value: forwardNetAPR,
+        blockNumber: '123',
+        blockTime: '456',
+      },
+      {
+        chainId: 747474,
+        address: REQUEST_VAULT_ADDRESS,
+        label: 'katana',
+        component: 'netAPY',
+        value: forwardNetAPY,
+        blockNumber: '123',
+        blockTime: '456',
+      },
+      {
+        chainId: 747474,
         address: STRATEGY_ADDRESS,
         label: 'katana',
         component: 'katRewardsAPR',
@@ -162,5 +195,157 @@ describe('/api/webhook route', () => {
         blockTime: '456',
       },
     ])
+  })
+
+  it('emits zero forward net APR and APY rows', async () => {
+    mocks.mockGenerateVaultAPRData.mockResolvedValue({
+      [VAULT_ADDRESS.toLowerCase()]: {
+        address: VAULT_ADDRESS,
+        symbol: 'yvKAT',
+        name: 'KAT Vault',
+        chainID: 747474,
+        strategies: [],
+        apr: {
+          forwardAPR: {
+            type: '',
+            netAPR: 0,
+            composite: {
+              boost: null,
+              poolAPY: null,
+              boostedAPR: null,
+              baseAPR: null,
+              cvxAPR: null,
+              rewardsAPR: null,
+            },
+          },
+          extra: {},
+        },
+      },
+    })
+
+    const response = await POST(
+      buildSignedRequest({
+        vaults: [REQUEST_VAULT_ADDRESS],
+        chainId: 747474,
+        blockNumber: '123',
+        blockTime: '456',
+        subscription: {
+          labels: ['katana-estimated-apr'],
+        },
+      }),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body).toContainEqual({
+      chainId: 747474,
+      address: REQUEST_VAULT_ADDRESS,
+      label: 'katana-estimated-apr',
+      component: 'netAPR',
+      value: 0,
+      blockNumber: '123',
+      blockTime: '456',
+    })
+    expect(body).toContainEqual({
+      chainId: 747474,
+      address: REQUEST_VAULT_ADDRESS,
+      label: 'katana-estimated-apr',
+      component: 'netAPY',
+      value: 0,
+      blockNumber: '123',
+      blockTime: '456',
+    })
+  })
+
+  it('does not emit forward APR or APY rows for null, missing, or non-finite values', async () => {
+    const nullForwardAddress = '0x00000000000000000000000000000000000000a1'
+    const missingForwardAddress = '0x00000000000000000000000000000000000000a2'
+    const nonFiniteForwardAddress = '0x00000000000000000000000000000000000000a3'
+
+    mocks.mockGenerateVaultAPRData.mockResolvedValue({
+      [nullForwardAddress]: {
+        address: nullForwardAddress,
+        symbol: 'yvNULL',
+        name: 'Null Forward Vault',
+        chainID: 747474,
+        strategies: [],
+        apr: {
+          forwardAPR: {
+            type: '',
+            netAPR: null,
+            composite: {
+              boost: null,
+              poolAPY: null,
+              boostedAPR: null,
+              baseAPR: null,
+              cvxAPR: null,
+              rewardsAPR: null,
+            },
+          },
+          extra: {},
+        },
+      },
+      [missingForwardAddress]: {
+        address: missingForwardAddress,
+        symbol: 'yvMISS',
+        name: 'Missing Forward Vault',
+        chainID: 747474,
+        strategies: [],
+        apr: {
+          extra: {},
+        },
+      },
+      [nonFiniteForwardAddress]: {
+        address: nonFiniteForwardAddress,
+        symbol: 'yvINF',
+        name: 'Non-finite Forward Vault',
+        chainID: 747474,
+        strategies: [],
+        apr: {
+          forwardAPR: {
+            type: '',
+            netAPR: Number.POSITIVE_INFINITY,
+            composite: {
+              boost: null,
+              poolAPY: null,
+              boostedAPR: null,
+              baseAPR: null,
+              cvxAPR: null,
+              rewardsAPR: null,
+            },
+          },
+          extra: {},
+        },
+      },
+    })
+
+    const response = await POST(
+      buildSignedRequest({
+        vaults: [
+          nullForwardAddress,
+          missingForwardAddress,
+          nonFiniteForwardAddress,
+        ],
+        chainId: 747474,
+        blockNumber: '123',
+        blockTime: '456',
+        subscription: {
+          labels: ['katana-estimated-apr'],
+        },
+      }),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body).not.toContainEqual(
+      expect.objectContaining({
+        component: 'netAPR',
+      }),
+    )
+    expect(body).not.toContainEqual(
+      expect.objectContaining({
+        component: 'netAPY',
+      }),
+    )
   })
 })

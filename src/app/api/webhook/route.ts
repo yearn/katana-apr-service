@@ -33,6 +33,7 @@ interface ParsedWebhookBody {
 }
 
 const STRATEGY_APR_COMPONENT = 'katRewardsAPR'
+const COMPOUNDING_PERIODS_PER_YEAR = 52
 
 function verifyWebhookSignature(
   signatureHeader: string,
@@ -115,6 +116,36 @@ function buildStrategyOutputs(
   })
 }
 
+function buildForwardAPROutputs(
+  address: string,
+  forwardNetAPR: number | null | undefined,
+  base: Omit<KongOutput, 'address' | 'component' | 'value'>,
+): KongOutput[] {
+  const netAPR = toFiniteNumber(forwardNetAPR)
+
+  if (netAPR == null) {
+    return []
+  }
+
+  return [
+    {
+      ...base,
+      address,
+      component: 'netAPR',
+      value: netAPR,
+    },
+    {
+      ...base,
+      address,
+      component: 'netAPY',
+      value:
+        (1 + netAPR / COMPOUNDING_PERIODS_PER_YEAR) **
+          COMPOUNDING_PERIODS_PER_YEAR -
+        1,
+    },
+  ]
+}
+
 export async function POST(req: NextRequest): Promise<Response> {
   const secret = process.env.KONG_WEBHOOK_SECRET
   if (!secret) {
@@ -152,6 +183,13 @@ export async function POST(req: NextRequest): Promise<Response> {
         outputs.push({ ...base, address, component, value: extra[component] ?? 0 })
       }
 
+      outputs.push(
+        ...buildForwardAPROutputs(
+          address,
+          vault.apr?.forwardAPR?.netAPR,
+          base,
+        ),
+      )
       outputs.push(...buildStrategyOutputs(vault.strategies || [], base))
     }
 

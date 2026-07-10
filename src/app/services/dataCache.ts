@@ -36,6 +36,8 @@ interface StrategyRewardSummary {
   underlyingContract?: string
 }
 
+const KATANA_ACCOUNTANT_DEFAULT_MAX_FEE = 0.5
+
 export class DataCacheService {
   private yearnApi: YearnApiService
   private yearnAprCalculator: YearnAprCalculator
@@ -294,7 +296,9 @@ export class DataCacheService {
       const strategyAPR =
         replacementAPR ?? this.getCurrentStrategyAPR(strategy)
 
-      return sum + debtShare * strategyAPR
+      return (
+        sum + this.computeNetStrategyForwardAPR(strategyAPR, debtShare, vault)
+      )
     }, 0)
 
     return {
@@ -309,6 +313,40 @@ export class DataCacheService {
         rewardsAPR: null,
       },
     }
+  }
+
+  private computeNetStrategyForwardAPR(
+    strategyAPR: number,
+    debtShare: number,
+    vault: YearnVault,
+  ): number {
+    const grossContribution = strategyAPR * debtShare
+    if (grossContribution <= 0) {
+      return 0
+    }
+
+    const managementFee = this.getFiniteFee(vault.apr?.fees?.management)
+    const performanceFee = this.getFiniteFee(vault.apr?.fees?.performance)
+    const maxFee = this.getFiniteFee(
+      vault.apr?.fees?.maxFee,
+      KATANA_ACCOUNTANT_DEFAULT_MAX_FEE,
+    )
+    const managementFeeContribution = managementFee * debtShare
+    const uncappedFees =
+      managementFeeContribution + grossContribution * performanceFee
+    const totalFees =
+      maxFee > 0
+        ? Math.min(uncappedFees, grossContribution * maxFee)
+        : uncappedFees
+    const netAPR = grossContribution - totalFees
+
+    return Math.max(netAPR, 0)
+  }
+
+  private getFiniteFee(value: number | undefined, fallback = 0): number {
+    return typeof value === 'number' && Number.isFinite(value)
+      ? value
+      : fallback
   }
 
   private getStrategyDebtShare(

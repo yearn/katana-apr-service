@@ -117,6 +117,7 @@ describe('YearnApiService', () => {
         fees: {
           management: 0.0025,
           performance: 0.1,
+          maxFee: 0.5,
         },
         pricePerShare: {
           today: 1,
