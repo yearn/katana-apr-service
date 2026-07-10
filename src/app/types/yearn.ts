@@ -14,12 +14,31 @@ export interface YearnRewardToken {
   assumedFDV?: number
 }
 
+export interface MorphoUnderlyingAPR {
+  morphoVaultAddress: string | null
+  usedMorphoApi: boolean
+  morphoBaseAPR: number
+  morphoBaseAPY: number
+  morphoRewardsAPR: number
+  estimatedAPR: number
+  estimatedAPY: number
+}
+
+export interface VaultMorphoUnderlyingAPR {
+  baseAPR: number
+  rewardsAPR: number
+  estimatedAPR: number
+  estimatedAPY: number
+  coveredDebtRatio: number
+}
+
 export interface YearnStrategy {
   address: string
   name: string
   status?: string
   netAPR?: number | null
   strategyRewardsAPR?: number | null
+  morphoUnderlyingAPR?: MorphoUnderlyingAPR
   rewardToken?: YearnRewardToken | null
   underlyingContract?: string | null
   details?: YearnStrategyDetails
@@ -73,6 +92,7 @@ export interface YearnVaultAPY {
       cvxAPR: number | null
       rewardsAPR: number | null
     }
+    morphoUnderlying?: VaultMorphoUnderlyingAPR
   }
 }
 

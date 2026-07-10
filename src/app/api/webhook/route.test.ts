@@ -58,6 +58,16 @@ describe('/api/webhook route', () => {
             address: STRATEGY_ADDRESS,
             name: 'Morpho Strategy',
             strategyRewardsAPR: 0.123,
+            morphoUnderlyingAPR: {
+              morphoVaultAddress:
+                '0x00000000000000000000000000000000000000ee',
+              usedMorphoApi: true,
+              morphoBaseAPR: 0.04,
+              morphoBaseAPY: 0.0408,
+              morphoRewardsAPR: 0.02,
+              estimatedAPR: 0.06,
+              estimatedAPY: 0.0618,
+            },
           },
           {
             address: SECOND_STRATEGY_ADDRESS,
@@ -86,6 +96,13 @@ describe('/api/webhook route', () => {
               cvxAPR: null,
               rewardsAPR: null,
             },
+            morphoUnderlying: {
+              baseAPR: 0.02,
+              rewardsAPR: 0.01,
+              estimatedAPR: 0.03,
+              estimatedAPY: 0.0305,
+              coveredDebtRatio: 0.5,
+            },
           },
           extra: {
             katanaAppRewardsAPR: 0.1234,
@@ -112,6 +129,12 @@ describe('/api/webhook route', () => {
     const body = await response.json()
 
     expect(response.status).toBe(200)
+    expect(body).not.toContainEqual(
+      expect.objectContaining({ component: 'morphoRewardsAPR' }),
+    )
+    expect(body).not.toContainEqual(
+      expect.objectContaining({ component: 'estimatedAPR' }),
+    )
     expect(body).toEqual([
       {
         chainId: 747474,

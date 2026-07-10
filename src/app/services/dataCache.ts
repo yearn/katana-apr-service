@@ -182,11 +182,17 @@ export class DataCacheService {
     const strategyRewardsByAddress = this.buildStrategyRewardsByAddress(
       strategyResults,
     )
+    const morphoUnderlyingByAddress = this.buildMorphoUnderlyingByAddress(
+      morphoUnderlyingResults,
+    )
 
     const strategiesWithRewards = (vault.strategies || []).map((strategy) => {
       const strategyAddress = this.normalizeAddress(strategy.address)
       const strategyRewards = strategyAddress
         ? strategyRewardsByAddress[strategyAddress]
+        : undefined
+      const morphoUnderlying = strategyAddress
+        ? morphoUnderlyingByAddress[strategyAddress]
         : undefined
       const strategyRewardsAPR = strategyRewards
         ? strategyRewards.rawApr > 0
@@ -196,6 +202,19 @@ export class DataCacheService {
 
       return {
         ...strategy,
+        ...(morphoUnderlying
+          ? {
+              morphoUnderlyingAPR: {
+                morphoVaultAddress: morphoUnderlying.morphoVaultAddress,
+                usedMorphoApi: morphoUnderlying.usedMorphoApi,
+                morphoBaseAPR: morphoUnderlying.morphoBaseAPR,
+                morphoBaseAPY: morphoUnderlying.morphoBaseAPY,
+                morphoRewardsAPR: morphoUnderlying.morphoRewardsAPR,
+                estimatedAPR: morphoUnderlying.replacementAPR,
+                estimatedAPY: morphoUnderlying.estimatedAPY,
+              },
+            }
+          : {}),
         ...(strategyRewards
           ? {
               strategyRewardsAPR,
@@ -312,6 +331,50 @@ export class DataCacheService {
         cvxAPR: null,
         rewardsAPR: null,
       },
+      morphoUnderlying: this.buildVaultMorphoUnderlyingAPR(
+        vault,
+        morphoUnderlyingResults,
+      ),
+    }
+  }
+
+  private buildVaultMorphoUnderlyingAPR(
+    vault: YearnVault,
+    morphoUnderlyingResults: MorphoUnderlyingAprResult[],
+  ): NonNullable<YearnVaultAPY['forwardAPR']>['morphoUnderlying'] {
+    const weighted = morphoUnderlyingResults.reduce(
+      (accumulator, result) => {
+        const strategy = vault.strategies.find(
+          (candidate) =>
+            candidate.address.toLowerCase() ===
+            result.strategyAddress.toLowerCase(),
+        )
+        if (!strategy) {
+          return accumulator
+        }
+
+        const debtShare = this.getStrategyDebtShare(strategy, vault)
+        if (debtShare <= 0) {
+          return accumulator
+        }
+
+        accumulator.baseAPR += result.morphoBaseAPR * debtShare
+        accumulator.rewardsAPR += result.morphoRewardsAPR * debtShare
+        accumulator.estimatedAPR += result.replacementAPR * debtShare
+        accumulator.coveredDebtRatio += debtShare
+        return accumulator
+      },
+      {
+        baseAPR: 0,
+        rewardsAPR: 0,
+        estimatedAPR: 0,
+        coveredDebtRatio: 0,
+      },
+    )
+
+    return {
+      ...weighted,
+      estimatedAPY: this.convertAprToWeeklyApy(weighted.estimatedAPR),
     }
   }
 
@@ -404,6 +467,17 @@ export class DataCacheService {
     )
   }
 
+  private buildMorphoUnderlyingByAddress(
+    results: MorphoUnderlyingAprResult[],
+  ): Record<string, MorphoUnderlyingAprResult> {
+    return Object.fromEntries(
+      results.map((result) => [
+        result.strategyAddress.toLowerCase(),
+        result,
+      ]),
+    )
+  }
+
   private hasResolvedRewardToken(result: RewardCalculatorResult): boolean {
     return Boolean(result.breakdown?.token?.address)
   }
@@ -424,5 +498,9 @@ export class DataCacheService {
   private toFiniteNumber(value?: number | string): number {
     const parsed = Number(value)
     return Number.isFinite(parsed) ? parsed : 0
+  }
+
+  private convertAprToWeeklyApy(apr: number): number {
+    return (1 + apr / 52) ** 52 - 1
   }
 }
