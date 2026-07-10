@@ -397,11 +397,15 @@ describe('DataCacheService.generateVaultAPRData', () => {
 
     const service = new DataCacheService()
     const data = await service.generateVaultAPRData()
+    const morphoGross = 0.10 * 0.5
+    const steerGross = 0.04 * 0.25
 
     expect(data[vault.address].apr?.netAPR).toBe(0.0123)
     expect(data[vault.address].apr?.forwardAPR?.netAPR).toBeCloseTo(
-      (0.10 * 0.5 + 0.04 * 0.25) -
-        (0.02 + (0.10 * 0.5 + 0.04 * 0.25) * 0.1),
+      morphoGross -
+        (0.02 * 0.5 + morphoGross * 0.1) +
+        (steerGross -
+          Math.min(0.02 * 0.25 + steerGross * 0.1, steerGross * 0.5)),
     )
   })
 

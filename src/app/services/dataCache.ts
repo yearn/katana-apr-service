@@ -284,7 +284,7 @@ export class DataCacheService {
       ]),
     )
 
-    const grossForwardAPR = (vault.strategies || []).reduce((sum, strategy) => {
+    const netAPR = (vault.strategies || []).reduce((sum, strategy) => {
       const debtShare = this.getStrategyDebtShare(strategy, vault)
       if (debtShare <= 0) {
         return sum
@@ -296,9 +296,10 @@ export class DataCacheService {
       const strategyAPR =
         replacementAPR ?? this.getCurrentStrategyAPR(strategy)
 
-      return sum + debtShare * strategyAPR
+      return (
+        sum + this.computeNetStrategyForwardAPR(strategyAPR, debtShare, vault)
+      )
     }, 0)
-    const netAPR = this.computeNetForwardAPR(grossForwardAPR, vault)
 
     return {
       type: vault.apr?.forwardAPR?.type || '',
@@ -314,8 +315,13 @@ export class DataCacheService {
     }
   }
 
-  private computeNetForwardAPR(grossAPR: number, vault: YearnVault): number {
-    if (grossAPR <= 0) {
+  private computeNetStrategyForwardAPR(
+    strategyAPR: number,
+    debtShare: number,
+    vault: YearnVault,
+  ): number {
+    const grossContribution = strategyAPR * debtShare
+    if (grossContribution <= 0) {
       return 0
     }
 
@@ -325,10 +331,14 @@ export class DataCacheService {
       vault.apr?.fees?.maxFee,
       KATANA_ACCOUNTANT_DEFAULT_MAX_FEE,
     )
-    const uncappedFees = managementFee + grossAPR * performanceFee
+    const managementFeeContribution = managementFee * debtShare
+    const uncappedFees =
+      managementFeeContribution + grossContribution * performanceFee
     const totalFees =
-      maxFee > 0 ? Math.min(uncappedFees, grossAPR * maxFee) : uncappedFees
-    const netAPR = grossAPR - totalFees
+      maxFee > 0
+        ? Math.min(uncappedFees, grossContribution * maxFee)
+        : uncappedFees
+    const netAPR = grossContribution - totalFees
 
     return Math.max(netAPR, 0)
   }
