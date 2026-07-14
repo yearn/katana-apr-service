@@ -21,15 +21,15 @@ jobs:
       vault: webops-prod-katana-apr-service
       environment: ${{ github.event_name == 'pull_request' && 'preview' || 'production' }}
       secrets: |
-        RPC_URL_KATANA=katana-apr-service/RPC_URL_KATANA
+        KONG_BASE_URI=katana-apr-service/KONG_BASE_URI
         KONG_WEBHOOK_SECRET=katana-apr-service/KONG_WEBHOOK_SECRET
         COINGECKO_API_KEY=katana-apr-service/COINGECKO_API_KEY
-        KONG_BASE_URI=katana-apr-service/KONG_BASE_URI
-        YDAEMON_BASE_URI=katana-apr-service/YDAEMON_BASE_URI
-        MERKL_BASE_URI=katana-apr-service/MERKL_BASE_URI
-        MERKL_API_KEY=katana-apr-service/MERKL_API_KEY
+        RPC_URL_KATANA=katana-apr-service/RPC_URL_KATANA
         COINGECKO_BASE_URI=katana-apr-service/COINGECKO_BASE_URI
         COINGECKO_KATANA_COIN_ID=katana-apr-service/COINGECKO_KATANA_COIN_ID
         KATANA_APR_SERVICE_API=katana-apr-service/KATANA_APR_SERVICE_API
+        YDAEMON_BASE_URI=katana-apr-service/YDAEMON_BASE_URI
+        MERKL_BASE_URI=katana-apr-service/MERKL_BASE_URI
+        MERKL_API_KEY=katana-apr-service/MERKL_API_KEY
     secrets:
       OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}

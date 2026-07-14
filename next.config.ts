@@ -14,8 +14,6 @@ const INLINED_ENV = [
   "MERKL_BASE_URI",
   "COINGECKO_BASE_URI",
   "COINGECKO_KATANA_COIN_ID",
-  // ponytail: present in 1Password but not yet read by any code, so these are
-  // no-ops until something references the matching process.env.* key.
   "KATANA_APR_SERVICE_API",
   "MERKL_API_KEY",
 ] as const;
