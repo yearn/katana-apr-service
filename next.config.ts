@@ -1,9 +1,10 @@
 import type { NextConfig } from "next";
 
-// Runtime config sourced from 1Password and injected at `vercel build` time
-// (see .github/workflows/deploy.yml). Listed vars are inlined into the build
-// output so nothing has to live in Vercel's env store. All are referenced
-// server-side only, so they never reach the client bundle.
+// Runtime config sourced from 1Password via yearn-gha vercel-deploy and
+// injected at `vercel build` time (see .github/workflows/deploy.yml). Listed
+// vars are inlined into the build output so nothing has to live in Vercel's
+// env store. All are referenced server-side only, so they never reach the
+// client bundle.
 const INLINED_ENV = [
   "RPC_URL_KATANA",
   "KONG_WEBHOOK_SECRET",
