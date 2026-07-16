@@ -99,20 +99,47 @@ function buildStrategyOutputs(
 ): KongOutput[] {
   return strategies.flatMap((strategy) => {
     const address = strategy.address
-    const value = toFiniteNumber(strategy.strategyRewardsAPR)
-
-    if (!address || value == null) {
+    if (!address) {
       return []
     }
 
-    return [
-      {
+    const outputs: KongOutput[] = []
+    const estimatedAPR = toFiniteNumber(
+      strategy.morphoUnderlyingAPR?.estimatedAPR,
+    )
+    const estimatedAPY = toFiniteNumber(
+      strategy.morphoUnderlyingAPR?.estimatedAPY,
+    )
+    const katRewardsAPR = toFiniteNumber(strategy.strategyRewardsAPR)
+
+    if (estimatedAPR != null) {
+      outputs.push({
+        ...base,
+        address,
+        component: 'netAPR',
+        value: estimatedAPR,
+      })
+    }
+
+    if (estimatedAPY != null) {
+      outputs.push({
+        ...base,
+        address,
+        component: 'netAPY',
+        value: estimatedAPY,
+      })
+    }
+
+    if (katRewardsAPR != null) {
+      outputs.push({
         ...base,
         address,
         component: STRATEGY_APR_COMPONENT,
-        value,
-      },
-    ]
+        value: katRewardsAPR,
+      })
+    }
+
+    return outputs
   })
 }
 
