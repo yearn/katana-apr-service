@@ -7,7 +7,11 @@ import { YearnApiService } from '../externalApis/yearnApi'
 export interface MorphoUnderlyingAprResult {
   strategyAddress: string
   morphoVaultAddress: string | null
+  morphoBaseAPR: number
+  morphoBaseAPY: number
+  morphoRewardsAPR: number
   replacementAPR: number
+  estimatedAPY: number
   usedMorphoApi: boolean
 }
 
@@ -76,12 +80,14 @@ export class MorphoUnderlyingAprCalculator {
               ? morphoVaultEstimates[morphoVaultAddress.toLowerCase()]
               : undefined
 
+            const aprEstimate = estimate
+              ? this.buildMorphoAprEstimate(estimate)
+              : this.buildFallbackAprEstimate(strategy)
+
             return {
               strategyAddress,
               morphoVaultAddress,
-              replacementAPR: estimate
-                ? this.calculateReplacementAPR(estimate)
-                : this.getFallbackStrategyAPR(strategy),
+              ...aprEstimate,
               usedMorphoApi: Boolean(estimate),
             }
           })
@@ -125,14 +131,44 @@ export class MorphoUnderlyingAprCalculator {
     return this.morphoApi.getVaultAprEstimates(morphoVaultAddresses)
   }
 
-  private calculateReplacementAPR(
-    estimate: MorphoVaultAprEstimate,
-  ): number {
-    return this.convertApyToWeeklyApr(estimate.baseAPY) + estimate.rewardsAPR
+  private buildMorphoAprEstimate(estimate: MorphoVaultAprEstimate): Omit<
+    MorphoUnderlyingAprResult,
+    'strategyAddress' | 'morphoVaultAddress' | 'usedMorphoApi'
+  > {
+    const morphoBaseAPR = this.convertApyToWeeklyApr(estimate.baseAPY)
+    const morphoRewardsAPR = estimate.rewardsAPR
+    const replacementAPR = morphoBaseAPR + morphoRewardsAPR
+
+    return {
+      morphoBaseAPR,
+      morphoBaseAPY: estimate.baseAPY,
+      morphoRewardsAPR,
+      replacementAPR,
+      estimatedAPY: this.convertAprToWeeklyApy(replacementAPR),
+    }
+  }
+
+  private buildFallbackAprEstimate(strategy: YearnStrategy): Omit<
+    MorphoUnderlyingAprResult,
+    'strategyAddress' | 'morphoVaultAddress' | 'usedMorphoApi'
+  > {
+    const replacementAPR = this.getFallbackStrategyAPR(strategy)
+
+    return {
+      morphoBaseAPR: 0,
+      morphoBaseAPY: 0,
+      morphoRewardsAPR: 0,
+      replacementAPR,
+      estimatedAPY: this.convertAprToWeeklyApy(replacementAPR),
+    }
   }
 
   private convertApyToWeeklyApr(apy: number): number {
     return 52 * ((1 + apy) ** (1 / 52) - 1)
+  }
+
+  private convertAprToWeeklyApy(apr: number): number {
+    return (1 + apr / 52) ** 52 - 1
   }
 
   private getFallbackStrategyAPR(strategy: YearnStrategy): number {

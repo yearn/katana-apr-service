@@ -125,7 +125,15 @@ describe('MorphoUnderlyingAprCalculator', () => {
       {
         strategyAddress: COMPOUNDER_ADDRESS,
         morphoVaultAddress: MORPHO_VAULT_ADDRESS,
+        morphoBaseAPR: 52 * ((1 + 0.052) ** (1 / 52) - 1),
+        morphoBaseAPY: 0.052,
+        morphoRewardsAPR: 0.01,
         replacementAPR: 52 * ((1 + 0.052) ** (1 / 52) - 1) + 0.01,
+        estimatedAPY:
+          (1 +
+            (52 * ((1 + 0.052) ** (1 / 52) - 1) + 0.01) / 52) **
+            52 -
+          1,
         usedMorphoApi: true,
       },
     ])
@@ -148,7 +156,11 @@ describe('MorphoUnderlyingAprCalculator', () => {
       {
         strategyAddress: COMPOUNDER_ADDRESS,
         morphoVaultAddress: MORPHO_VAULT_ADDRESS,
+        morphoBaseAPR: 0,
+        morphoBaseAPY: 0,
+        morphoRewardsAPR: 0,
         replacementAPR: 0.01,
+        estimatedAPY: (1 + 0.01 / 52) ** 52 - 1,
         usedMorphoApi: false,
       },
     ])

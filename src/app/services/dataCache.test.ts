@@ -389,7 +389,11 @@ describe('DataCacheService.generateVaultAPRData', () => {
           strategyAddress: morphoStrategyAddress,
           morphoVaultAddress:
             '0x00000000000000000000000000000000000000a1',
+          morphoBaseAPR: 0.08,
+          morphoBaseAPY: 0.0832,
+          morphoRewardsAPR: 0.02,
           replacementAPR: 0.10,
+          estimatedAPY: (1 + 0.10 / 52) ** 52 - 1,
           usedMorphoApi: true,
         },
       ],
@@ -407,6 +411,23 @@ describe('DataCacheService.generateVaultAPRData', () => {
         (steerGross -
           Math.min(0.02 * 0.25 + steerGross * 0.1, steerGross * 0.5)),
     )
+    expect(data[vault.address].apr?.forwardAPR?.morphoUnderlying).toEqual({
+      baseAPR: 0.08 * 0.5,
+      rewardsAPR: 0.02 * 0.5,
+      estimatedAPR: 0.10 * 0.5,
+      estimatedAPY: (1 + (0.10 * 0.5) / 52) ** 52 - 1,
+      coveredDebtRatio: 0.5,
+    })
+    expect(data[vault.address].strategies[0].morphoUnderlyingAPR).toEqual({
+      morphoVaultAddress: '0x00000000000000000000000000000000000000a1',
+      usedMorphoApi: true,
+      morphoBaseAPR: 0.08,
+      morphoBaseAPY: 0.0832,
+      morphoRewardsAPR: 0.02,
+      estimatedAPR: 0.10,
+      estimatedAPY: (1 + 0.10 / 52) ** 52 - 1,
+    })
+    expect(data[vault.address].strategies[1].morphoUnderlyingAPR).toBeUndefined()
   })
 
   it('uses current strategy APR in forward APR when Morpho estimates are missing', async () => {
@@ -444,7 +465,11 @@ describe('DataCacheService.generateVaultAPRData', () => {
           strategyAddress: morphoStrategyAddress,
           morphoVaultAddress:
             '0x00000000000000000000000000000000000000a2',
+          morphoBaseAPR: 0,
+          morphoBaseAPY: 0,
+          morphoRewardsAPR: 0,
           replacementAPR: 0.03,
+          estimatedAPY: (1 + 0.03 / 52) ** 52 - 1,
           usedMorphoApi: false,
         },
       ],
@@ -455,6 +480,13 @@ describe('DataCacheService.generateVaultAPRData', () => {
 
     expect(data[vault.address].apr?.netAPR).toBe(0.02)
     expect(data[vault.address].apr?.forwardAPR?.netAPR).toBeCloseTo(0.015)
+    expect(data[vault.address].apr?.forwardAPR?.morphoUnderlying).toEqual({
+      baseAPR: 0,
+      rewardsAPR: 0,
+      estimatedAPR: 0.015,
+      estimatedAPY: (1 + 0.015 / 52) ** 52 - 1,
+      coveredDebtRatio: 0.5,
+    })
   })
 
   it('keeps forward APR unchanged when there are no Morpho replacement results', async () => {
