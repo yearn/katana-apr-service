@@ -2,15 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { YearnVault } from '../../types'
 
 const mocks = vi.hoisted(() => ({
-  getActiveMorphoCompounderStrategies: vi.fn(),
+  getMorphoCompounderStrategies: vi.fn(),
   getMorphoVaultsFromStrategies: vi.fn(),
   getVaultAprEstimates: vi.fn(),
 }))
 
 vi.mock('../externalApis/yearnApi', () => ({
   YearnApiService: vi.fn().mockImplementation(() => ({
-    getActiveMorphoCompounderStrategies:
-      mocks.getActiveMorphoCompounderStrategies,
+    getMorphoCompounderStrategies: mocks.getMorphoCompounderStrategies,
   })),
 }))
 
@@ -89,14 +88,14 @@ const makeVault = (): YearnVault => ({
 
 describe('MorphoUnderlyingAprCalculator', () => {
   beforeEach(() => {
-    mocks.getActiveMorphoCompounderStrategies.mockReset()
+    mocks.getMorphoCompounderStrategies.mockReset()
     mocks.getMorphoVaultsFromStrategies.mockReset()
     mocks.getVaultAprEstimates.mockReset()
   })
 
-  it('uses dynamic vault mapping for selected active compounders only', async () => {
+  it('uses dynamic vault mapping for selected compounders', async () => {
     const vault = makeVault()
-    mocks.getActiveMorphoCompounderStrategies.mockReturnValue([
+    mocks.getMorphoCompounderStrategies.mockReturnValue([
       COMPOUNDER_ADDRESS,
     ])
     mocks.getMorphoVaultsFromStrategies.mockResolvedValue({
@@ -112,9 +111,7 @@ describe('MorphoUnderlyingAprCalculator', () => {
     const calculator = new MorphoUnderlyingAprCalculator()
     const results = await calculator.calculateVaultAPRs([vault])
 
-    expect(mocks.getActiveMorphoCompounderStrategies).toHaveBeenCalledWith(
-      vault,
-    )
+    expect(mocks.getMorphoCompounderStrategies).toHaveBeenCalledWith(vault)
     expect(mocks.getMorphoVaultsFromStrategies).toHaveBeenCalledWith([
       COMPOUNDER_ADDRESS,
     ])
@@ -141,7 +138,7 @@ describe('MorphoUnderlyingAprCalculator', () => {
 
   it('falls back to the existing strategy APR when an estimate is missing', async () => {
     const vault = makeVault()
-    mocks.getActiveMorphoCompounderStrategies.mockReturnValue([
+    mocks.getMorphoCompounderStrategies.mockReturnValue([
       COMPOUNDER_ADDRESS,
     ])
     mocks.getMorphoVaultsFromStrategies.mockResolvedValue({

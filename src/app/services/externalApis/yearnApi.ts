@@ -431,16 +431,13 @@ export class YearnApiService {
       .map((strategy): string => strategy.address)
   }
 
-  getActiveMorphoCompounderStrategies(vault: YearnVault): string[] {
+  getMorphoCompounderStrategies(vault: YearnVault): string[] {
     return vault.strategies
       .filter((strategy): boolean =>
         Boolean(
           strategy.name?.includes('Morpho') &&
             strategy.name?.includes('Compounder') &&
-            !strategy.name?.includes('Lender Borrower') &&
-            strategy.details?.totalDebt &&
-            strategy.details.totalDebt !== '0' &&
-            strategy.details.totalDebt !== '0x0'
+            !strategy.name?.includes('Lender Borrower')
         )
       )
       .map((strategy): string => strategy.address)

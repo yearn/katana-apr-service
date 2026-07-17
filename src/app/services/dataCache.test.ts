@@ -370,7 +370,7 @@ describe('DataCacheService.generateVaultAPRData', () => {
         },
         {
           address: idleStrategyAddress,
-          name: 'Idle Slot',
+          name: 'Morpho Idle USDC Compounder',
           status: 'unallocated',
           netAPR: 0.50,
           details: {
@@ -394,6 +394,17 @@ describe('DataCacheService.generateVaultAPRData', () => {
           morphoRewardsAPR: 0.02,
           replacementAPR: 0.10,
           estimatedAPY: (1 + 0.10 / 52) ** 52 - 1,
+          usedMorphoApi: true,
+        },
+        {
+          strategyAddress: idleStrategyAddress,
+          morphoVaultAddress:
+            '0x00000000000000000000000000000000000000a2',
+          morphoBaseAPR: 0.20,
+          morphoBaseAPY: 0.22,
+          morphoRewardsAPR: 0.30,
+          replacementAPR: 0.50,
+          estimatedAPY: (1 + 0.50 / 52) ** 52 - 1,
           usedMorphoApi: true,
         },
       ],
@@ -428,6 +439,15 @@ describe('DataCacheService.generateVaultAPRData', () => {
       estimatedAPY: (1 + 0.10 / 52) ** 52 - 1,
     })
     expect(data[vault.address].strategies[1].morphoUnderlyingAPR).toBeUndefined()
+    expect(data[vault.address].strategies[2].morphoUnderlyingAPR).toEqual({
+      morphoVaultAddress: '0x00000000000000000000000000000000000000a2',
+      usedMorphoApi: true,
+      morphoBaseAPR: 0.20,
+      morphoBaseAPY: 0.22,
+      morphoRewardsAPR: 0.30,
+      estimatedAPR: 0.50,
+      estimatedAPY: (1 + 0.50 / 52) ** 52 - 1,
+    })
   })
 
   it('uses current strategy APR in forward APR when Morpho estimates are missing', async () => {
