@@ -159,7 +159,7 @@ describe('YearnApiService', () => {
     )
   })
 
-  it('selects active Morpho compounders only for replacement APRs', () => {
+  it('selects allocated and unallocated Morpho compounders for estimates', () => {
     const vault: YearnVault = {
       address: '0x00000000000000000000000000000000000000aa',
       symbol: 'yvvbUSDC',
@@ -214,8 +214,9 @@ describe('YearnApiService', () => {
 
     const service = new YearnApiService()
 
-    expect(service.getActiveMorphoCompounderStrategies(vault)).toEqual([
+    expect(service.getMorphoCompounderStrategies(vault)).toEqual([
       '0x0000000000000000000000000000000000000001',
+      '0x0000000000000000000000000000000000000003',
     ])
   })
 })

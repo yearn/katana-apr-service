@@ -33,7 +33,7 @@ export class MorphoUnderlyingAprCalculator {
       .map((vault) => ({
         vault,
         strategyAddresses:
-          this.yearnApi.getActiveMorphoCompounderStrategies(vault),
+          this.yearnApi.getMorphoCompounderStrategies(vault),
       }))
       .filter(({ strategyAddresses }) => strategyAddresses.length > 0)
 

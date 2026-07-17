@@ -254,6 +254,7 @@ describe('/api/webhook route', () => {
           {
             address: zeroEstimateAddress,
             name: 'Morpho Strategy Without KAT',
+            status: 'unallocated',
             morphoUnderlyingAPR: {
               morphoVaultAddress:
                 '0x00000000000000000000000000000000000000e1',
