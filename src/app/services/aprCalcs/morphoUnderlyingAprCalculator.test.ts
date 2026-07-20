@@ -136,7 +136,7 @@ describe('MorphoUnderlyingAprCalculator', () => {
     ])
   })
 
-  it('falls back to the existing strategy APR when an estimate is missing', async () => {
+  it('marks the forward estimate unavailable when the Morpho estimate is missing', async () => {
     const vault = makeVault()
     mocks.getMorphoCompounderStrategies.mockReturnValue([
       COMPOUNDER_ADDRESS,
@@ -156,8 +156,8 @@ describe('MorphoUnderlyingAprCalculator', () => {
         morphoBaseAPR: 0,
         morphoBaseAPY: 0,
         morphoRewardsAPR: 0,
-        replacementAPR: 0.01,
-        estimatedAPY: (1 + 0.01 / 52) ** 52 - 1,
+        replacementAPR: null,
+        estimatedAPY: null,
         usedMorphoApi: false,
       },
     ])

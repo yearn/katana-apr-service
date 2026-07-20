@@ -20,8 +20,8 @@ export interface MorphoUnderlyingAPR {
   morphoBaseAPR: number
   morphoBaseAPY: number
   morphoRewardsAPR: number
-  estimatedAPR: number
-  estimatedAPY: number
+  estimatedAPR: number | null
+  estimatedAPY: number | null
 }
 
 export interface VaultMorphoUnderlyingAPR {

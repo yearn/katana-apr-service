@@ -1,5 +1,5 @@
 import _ from 'lodash'
-import type { YearnVault, YearnStrategy } from '../../types'
+import type { YearnVault } from '../../types'
 import { ContractReaderService } from '../contractReader'
 import { MorphoApiService, type MorphoVaultAprEstimate } from '../externalApis/morphoApi'
 import { YearnApiService } from '../externalApis/yearnApi'
@@ -10,8 +10,8 @@ export interface MorphoUnderlyingAprResult {
   morphoBaseAPR: number
   morphoBaseAPY: number
   morphoRewardsAPR: number
-  replacementAPR: number
-  estimatedAPY: number
+  replacementAPR: number | null
+  estimatedAPY: number | null
   usedMorphoApi: boolean
 }
 
@@ -82,7 +82,7 @@ export class MorphoUnderlyingAprCalculator {
 
             const aprEstimate = estimate
               ? this.buildMorphoAprEstimate(estimate)
-              : this.buildFallbackAprEstimate(strategy)
+              : this.buildUnavailableAprEstimate()
 
             return {
               strategyAddress,
@@ -148,18 +148,16 @@ export class MorphoUnderlyingAprCalculator {
     }
   }
 
-  private buildFallbackAprEstimate(strategy: YearnStrategy): Omit<
+  private buildUnavailableAprEstimate(): Omit<
     MorphoUnderlyingAprResult,
     'strategyAddress' | 'morphoVaultAddress' | 'usedMorphoApi'
   > {
-    const replacementAPR = this.getFallbackStrategyAPR(strategy)
-
     return {
       morphoBaseAPR: 0,
       morphoBaseAPY: 0,
       morphoRewardsAPR: 0,
-      replacementAPR,
-      estimatedAPY: this.convertAprToWeeklyApy(replacementAPR),
+      replacementAPR: null,
+      estimatedAPY: null,
     }
   }
 
@@ -169,10 +167,5 @@ export class MorphoUnderlyingAprCalculator {
 
   private convertAprToWeeklyApy(apr: number): number {
     return (1 + apr / 52) ** 52 - 1
-  }
-
-  private getFallbackStrategyAPR(strategy: YearnStrategy): number {
-    const parsed = Number(strategy.netAPR)
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
   }
 }

@@ -199,9 +199,14 @@ export class DataCacheService {
           ? strategyRewards.rawApr
           : strategy.strategyRewardsAPR ?? strategyRewards.rawApr
         : strategy.strategyRewardsAPR ?? null
+      const liveStrategyNetAPR =
+        morphoUnderlying && this.hasLiveMorphoReplacement(morphoUnderlying)
+          ? morphoUnderlying.replacementAPR
+          : null
 
       return {
         ...strategy,
+        netAPR: liveStrategyNetAPR,
         ...(morphoUnderlying
           ? {
               morphoUnderlyingAPR: {
@@ -296,27 +301,38 @@ export class DataCacheService {
       return vault.apr?.forwardAPR
     }
 
+    const liveResults = morphoUnderlyingResults.filter(
+      this.hasLiveMorphoReplacement,
+    )
     const replacementAprByStrategy = new Map(
-      morphoUnderlyingResults.map((result) => [
+      liveResults.map((result) => [
         result.strategyAddress.toLowerCase(),
         result.replacementAPR,
       ]),
     )
+    const allocatedStrategies = (vault.strategies || [])
+      .map((strategy) => ({
+        strategy,
+        debtShare: this.getStrategyDebtShare(strategy, vault),
+      }))
+      .filter(({ debtShare }) => debtShare > 0)
 
-    const netAPR = (vault.strategies || []).reduce((sum, strategy) => {
-      const debtShare = this.getStrategyDebtShare(strategy, vault)
-      if (debtShare <= 0) {
-        return sum
-      }
+    const hasCompleteLiveCoverage = allocatedStrategies.every(({ strategy }) =>
+      replacementAprByStrategy.has(strategy.address.toLowerCase()),
+    )
+    // Never fill partial live coverage with Kong's historical latestReportApr.
+    if (!hasCompleteLiveCoverage) {
+      return vault.apr?.forwardAPR
+    }
 
+    const netAPR = allocatedStrategies.reduce((sum, { strategy, debtShare }) => {
       const replacementAPR = replacementAprByStrategy.get(
         strategy.address.toLowerCase(),
-      )
-      const strategyAPR =
-        replacementAPR ?? this.getCurrentStrategyAPR(strategy)
+      )!
 
       return (
-        sum + this.computeNetStrategyForwardAPR(strategyAPR, debtShare, vault)
+        sum +
+        this.computeNetStrategyForwardAPR(replacementAPR, debtShare, vault)
       )
     }, 0)
 
@@ -333,14 +349,16 @@ export class DataCacheService {
       },
       morphoUnderlying: this.buildVaultMorphoUnderlyingAPR(
         vault,
-        morphoUnderlyingResults,
+        liveResults,
       ),
     }
   }
 
   private buildVaultMorphoUnderlyingAPR(
     vault: YearnVault,
-    morphoUnderlyingResults: MorphoUnderlyingAprResult[],
+    morphoUnderlyingResults: Array<
+      MorphoUnderlyingAprResult & { replacementAPR: number }
+    >,
   ): NonNullable<YearnVaultAPY['forwardAPR']>['morphoUnderlying'] {
     const weighted = morphoUnderlyingResults.reduce(
       (accumulator, result) => {
@@ -434,9 +452,16 @@ export class DataCacheService {
     }
   }
 
-  private getCurrentStrategyAPR(strategy: YearnStrategy): number {
-    const parsed = this.toFiniteNumber(strategy.netAPR ?? undefined)
-    return parsed > 0 ? parsed : 0
+  private hasLiveMorphoReplacement(
+    result: MorphoUnderlyingAprResult,
+  ): result is MorphoUnderlyingAprResult & {
+    replacementAPR: number
+  } {
+    return (
+      result.usedMorphoApi &&
+      typeof result.replacementAPR === 'number' &&
+      Number.isFinite(result.replacementAPR)
+    )
   }
 
   private buildStrategyRewardsByAddress(

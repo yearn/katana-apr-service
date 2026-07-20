@@ -93,6 +93,7 @@ describe('YearnApiService', () => {
               totalGain: '2',
               totalLoss: '1',
               lastReport: '123',
+              latestReportApr: 0.75,
               performanceFee: '0',
             },
           ],
