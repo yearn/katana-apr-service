@@ -202,7 +202,7 @@ export class DataCacheService {
       const liveStrategyNetAPR =
         morphoUnderlying && this.hasLiveMorphoReplacement(morphoUnderlying)
           ? morphoUnderlying.replacementAPR
-          : null
+          : this.getKongOracleAPR(strategy)
 
       return {
         ...strategy,
@@ -301,11 +301,11 @@ export class DataCacheService {
       return vault.apr?.forwardAPR
     }
 
-    const liveResults = morphoUnderlyingResults.filter(
+    const liveMorphoResults = morphoUnderlyingResults.filter(
       this.hasLiveMorphoReplacement,
     )
-    const replacementAprByStrategy = new Map(
-      liveResults.map((result) => [
+    const morphoReplacementByStrategy = new Map(
+      liveMorphoResults.map((result) => [
         result.strategyAddress.toLowerCase(),
         result.replacementAPR,
       ]),
@@ -317,22 +317,28 @@ export class DataCacheService {
       }))
       .filter(({ debtShare }) => debtShare > 0)
 
-    const hasCompleteLiveCoverage = allocatedStrategies.every(({ strategy }) =>
-      replacementAprByStrategy.has(strategy.address.toLowerCase()),
+    const strategiesWithForwardAPR = allocatedStrategies.map((allocation) => ({
+      ...allocation,
+      forwardAPR:
+        morphoReplacementByStrategy.get(
+          allocation.strategy.address.toLowerCase(),
+        ) ?? this.getKongOracleAPR(allocation.strategy),
+    }))
+    const hasCompleteForwardCoverage = strategiesWithForwardAPR.every(
+      ({ forwardAPR }) => forwardAPR !== null,
     )
-    // Never fill partial live coverage with Kong's historical latestReportApr.
-    if (!hasCompleteLiveCoverage) {
+    if (!hasCompleteForwardCoverage) {
       return vault.apr?.forwardAPR
     }
 
-    const netAPR = allocatedStrategies.reduce((sum, { strategy, debtShare }) => {
-      const replacementAPR = replacementAprByStrategy.get(
-        strategy.address.toLowerCase(),
-      )!
-
+    const netAPR = strategiesWithForwardAPR.reduce((sum, allocation) => {
       return (
         sum +
-        this.computeNetStrategyForwardAPR(replacementAPR, debtShare, vault)
+        this.computeNetStrategyForwardAPR(
+          allocation.forwardAPR!,
+          allocation.debtShare,
+          vault,
+        )
       )
     }, 0)
 
@@ -349,7 +355,7 @@ export class DataCacheService {
       },
       morphoUnderlying: this.buildVaultMorphoUnderlyingAPR(
         vault,
-        liveResults,
+        liveMorphoResults,
       ),
     }
   }
@@ -462,6 +468,12 @@ export class DataCacheService {
       typeof result.replacementAPR === 'number' &&
       Number.isFinite(result.replacementAPR)
     )
+  }
+
+  private getKongOracleAPR(strategy: YearnStrategy): number | null {
+    return typeof strategy.netAPR === 'number' && Number.isFinite(strategy.netAPR)
+      ? strategy.netAPR
+      : null
   }
 
   private buildStrategyRewardsByAddress(

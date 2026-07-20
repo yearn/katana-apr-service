@@ -309,7 +309,7 @@ describe('DataCacheService.generateVaultAPRData', () => {
     expect(data[vault.address].apr?.extra?.katanaRewardsAPR).toBe(0)
   })
 
-  it('preserves the existing forward APR when an allocated strategy lacks a live replacement', async () => {
+  it('uses a zero Kong oracle APR when an allocated strategy lacks a Morpho replacement', async () => {
     const morphoStrategyAddress =
       '0x00000000000000000000000000000000000000f1'
     const steerStrategyAddress =
@@ -359,7 +359,7 @@ describe('DataCacheService.generateVaultAPRData', () => {
           address: steerStrategyAddress,
           name: 'Steer USDC Strategy',
           status: 'active',
-          netAPR: 0.04,
+          netAPR: 0,
           details: {
             totalDebt: '25',
             totalGain: '0',
@@ -412,11 +412,21 @@ describe('DataCacheService.generateVaultAPRData', () => {
 
     const service = new DataCacheService()
     const data = await service.generateVaultAPRData()
+    const morphoGross = 0.10 * 0.5
+
     expect(data[vault.address].apr?.netAPR).toBe(0.0123)
-    expect(data[vault.address].apr?.forwardAPR?.netAPR).toBe(0.025)
-    expect(data[vault.address].apr?.forwardAPR?.morphoUnderlying).toBeUndefined()
+    expect(data[vault.address].apr?.forwardAPR?.netAPR).toBeCloseTo(
+      morphoGross - (0.02 * 0.5 + morphoGross * 0.1),
+    )
+    expect(data[vault.address].apr?.forwardAPR?.morphoUnderlying).toEqual({
+      baseAPR: 0.08 * 0.5,
+      rewardsAPR: 0.02 * 0.5,
+      estimatedAPR: 0.10 * 0.5,
+      estimatedAPY: (1 + (0.10 * 0.5) / 52) ** 52 - 1,
+      coveredDebtRatio: 0.5,
+    })
     expect(data[vault.address].strategies[0].netAPR).toBe(0.10)
-    expect(data[vault.address].strategies[1].netAPR).toBeNull()
+    expect(data[vault.address].strategies[1].netAPR).toBe(0)
     expect(data[vault.address].strategies[2].netAPR).toBe(0.50)
     expect(data[vault.address].strategies[0].morphoUnderlyingAPR).toEqual({
       morphoVaultAddress: '0x00000000000000000000000000000000000000a1',
@@ -439,7 +449,7 @@ describe('DataCacheService.generateVaultAPRData', () => {
     })
   })
 
-  it('does not use historical strategy APR when a Morpho estimate fails', async () => {
+  it('uses the Kong oracle APR when a Morpho estimate fails', async () => {
     const morphoStrategyAddress =
       '0x00000000000000000000000000000000000000f4'
     const vault = makeVault({
@@ -488,8 +498,8 @@ describe('DataCacheService.generateVaultAPRData', () => {
     const data = await service.generateVaultAPRData()
 
     expect(data[vault.address].apr?.netAPR).toBe(0.02)
-    expect(data[vault.address].apr?.forwardAPR).toBeUndefined()
-    expect(data[vault.address].strategies[0].netAPR).toBeNull()
+    expect(data[vault.address].apr?.forwardAPR?.netAPR).toBeCloseTo(0.015)
+    expect(data[vault.address].strategies[0].netAPR).toBe(0.03)
     expect(data[vault.address].strategies[0].morphoUnderlyingAPR).toMatchObject({
       usedMorphoApi: false,
       estimatedAPR: null,

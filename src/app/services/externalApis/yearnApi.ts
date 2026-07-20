@@ -29,6 +29,10 @@ type KongVaultCompositionItem = {
   lastReport?: string | number
   performanceFee?: string | number
   performance?: {
+    oracle?: {
+      apr?: number | null
+      apy?: number | null
+    }
     estimated?: {
       components?: Record<string, number | string | null>
     }
@@ -208,9 +212,9 @@ const mapKongCompositionToYearnStrategy = (
     address: strategy.address,
     name: strategy.name || 'Unknown',
     status: totalDebt === '0' ? 'unallocated' : strategy.status,
-    // latestReportApr is a historical point-in-time measurement and parent
-    // composition snapshots can retain it after the strategy snapshot changes.
-    netAPR: null,
+    // Use Kong's on-chain APR oracle output, including a valid zero. Do not use
+    // latestReportApr, which is historical and can be stale in compositions.
+    netAPR: toFiniteNumberOrNull(strategy.performance?.oracle?.apr),
     strategyRewardsAPR: estimatedKatRewardsAPR,
     rewardToken:
       estimatedKatRewardsAPR !== null && estimatedKatRewardsAPR > 0
