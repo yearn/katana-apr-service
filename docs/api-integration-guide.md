@@ -190,6 +190,7 @@ APR units:
 `DataCacheService.aggregateVaultResults()` sets:
 
 - `strategies[].strategyRewardsAPR` for active Morpho/Steer strategies as raw strategy APR in decimal form
+- `strategies[].netAPR` from a successful live Morpho replacement when available, otherwise from Kong's on-chain oracle APR (including `0`); Kong `latestReportApr` is historical and is never exposed as a current strategy APR
 - `strategies[].rewardToken` and `strategies[].underlyingContract` when the strategy pool/token could be resolved
 - `apr.extra.katanaRewardsAPR` (legacy alias)
 - `apr.extra.katanaAppRewardsAPR` from Yearn vault-level rewards

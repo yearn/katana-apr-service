@@ -28,8 +28,11 @@ type KongVaultCompositionItem = {
   totalLoss?: string
   lastReport?: string | number
   performanceFee?: string | number
-  latestReportApr?: number | null
   performance?: {
+    oracle?: {
+      apr?: number | null
+      apy?: number | null
+    }
     estimated?: {
       components?: Record<string, number | string | null>
     }
@@ -162,11 +165,6 @@ const calculateTokenPrice = (
   return normalizedAssets > 0 ? tvl / normalizedAssets : 0
 }
 
-const toPositiveFiniteNumberOrNull = (value: unknown): number | null => {
-  const parsed = toFiniteNumberOrNull(value)
-  return parsed && parsed > 0 ? parsed : null
-}
-
 const isKatanaYearnVault = (vault: KongVaultListItem): boolean =>
   vault.origin === 'yearn' && vault.inclusion?.isKatana === true
 
@@ -214,7 +212,9 @@ const mapKongCompositionToYearnStrategy = (
     address: strategy.address,
     name: strategy.name || 'Unknown',
     status: totalDebt === '0' ? 'unallocated' : strategy.status,
-    netAPR: toPositiveFiniteNumberOrNull(strategy.latestReportApr),
+    // Use Kong's on-chain APR oracle output, including a valid zero. Do not use
+    // latestReportApr, which is historical and can be stale in compositions.
+    netAPR: toFiniteNumberOrNull(strategy.performance?.oracle?.apr),
     strategyRewardsAPR: estimatedKatRewardsAPR,
     rewardToken:
       estimatedKatRewardsAPR !== null && estimatedKatRewardsAPR > 0

@@ -93,6 +93,13 @@ describe('YearnApiService', () => {
               totalGain: '2',
               totalLoss: '1',
               lastReport: '123',
+              latestReportApr: 0.75,
+              performance: {
+                oracle: {
+                  apr: 0,
+                  apy: 0,
+                },
+              },
               performanceFee: '0',
             },
           ],
@@ -136,7 +143,7 @@ describe('YearnApiService', () => {
         address: '0x00000000000000000000000000000000000000dd',
         name: 'Morpho Strategy',
         status: 'active',
-        netAPR: null,
+        netAPR: 0,
         strategyRewardsAPR: null,
         rewardToken: null,
         underlyingContract: null,
