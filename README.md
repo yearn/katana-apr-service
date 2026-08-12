@@ -48,7 +48,7 @@ Response body:
 
 Server-side errors and exceptions are exported as OpenTelemetry log records over OTLP/HTTP, using only `@opentelemetry/*` packages (vendor-neutral). Reporting is a no-op until an OTLP endpoint is configured.
 
-- Set `OTEL_EXPORTER_OTLP_ENDPOINT` (and `OTEL_EXPORTER_OTLP_HEADERS` for auth) to enable. Point it at any OTLP backend — Sentry's OTLP endpoint, Grafana, Honeycomb, or an OpenTelemetry Collector.
+- Set `OTEL_EXPORTER_OTLP_ENDPOINT` to an OTLP/HTTP base URL (the exporter appends `/v1/logs`), or set `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` to a complete logs URL such as Sentry's. Use `OTEL_EXPORTER_OTLP_HEADERS` for authentication.
 
 Init lives in `src/observability.ts`; it is started from `src/instrumentation.ts` and errors are captured in the API route handlers.
 

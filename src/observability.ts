@@ -52,5 +52,11 @@ export function captureError(error: unknown): void {
 
 // Serverless runtimes may freeze before batched logs export; flush after capture.
 export async function flushObservability(): Promise<void> {
-  await provider?.forceFlush()
+  try {
+    await provider?.forceFlush()
+  } catch (error) {
+    // Export errors must not turn an otherwise handled API error into a failed response.
+    // The OTLP exporter retries transient HTTP failures before forceFlush rejects.
+    console.error('Failed to export OpenTelemetry logs', { error })
+  }
 }

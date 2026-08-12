@@ -4,12 +4,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   mockGenerateVaultAPRData: vi.fn(),
+  mockCaptureError: vi.fn(),
+  mockFlushObservability: vi.fn(),
 }))
 
 vi.mock('../../services/dataCache', () => ({
   DataCacheService: vi.fn().mockImplementation(() => ({
     generateVaultAPRData: mocks.mockGenerateVaultAPRData,
   })),
+}))
+
+vi.mock('../../../observability', () => ({
+  captureError: mocks.mockCaptureError,
+  flushObservability: mocks.mockFlushObservability,
 }))
 
 import { POST } from './route'
@@ -41,6 +48,21 @@ describe('/api/webhook route', () => {
   beforeEach(() => {
     process.env.KONG_WEBHOOK_SECRET = WEBHOOK_SECRET
     mocks.mockGenerateVaultAPRData.mockReset()
+    mocks.mockCaptureError.mockReset()
+    mocks.mockFlushObservability.mockReset()
+    mocks.mockFlushObservability.mockResolvedValue(undefined)
+  })
+
+  it('reports a missing webhook secret before returning 500', async () => {
+    delete process.env.KONG_WEBHOOK_SECRET
+
+    const response = await POST(new NextRequest('http://localhost/api/webhook', { method: 'POST' }))
+
+    expect(response.status).toBe(500)
+    expect(mocks.mockCaptureError).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'webhook secret not configured',
+    }))
+    expect(mocks.mockFlushObservability).toHaveBeenCalledOnce()
   })
 
   it('returns vault-level components plus strategy-addressed KAT APR rows', async () => {

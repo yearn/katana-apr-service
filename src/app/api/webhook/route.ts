@@ -119,6 +119,8 @@ function buildStrategyOutputs(
 export async function POST(req: NextRequest): Promise<Response> {
   const secret = process.env.KONG_WEBHOOK_SECRET
   if (!secret) {
+    captureError(new Error('webhook secret not configured'))
+    await flushObservability()
     return NextResponse.json({ error: 'webhook secret not configured' }, { status: 500 })
   }
 
