@@ -10,29 +10,46 @@ import {
 } from '@opentelemetry/semantic-conventions'
 
 const SERVICE_NAME = 'katana-apr-service'
+const PROVIDER_KEY = Symbol.for('yearn.katana-apr-service.otel.logger-provider')
+const EXPORT_TIMEOUT_MS = 2_000
 
-let provider: LoggerProvider | undefined
+type OtelGlobal = typeof globalThis & { [PROVIDER_KEY]?: LoggerProvider }
+
+function getProvider(): LoggerProvider | undefined {
+  return (globalThis as OtelGlobal)[PROVIDER_KEY]
+}
+
+function serviceName(): string {
+  return process.env.OTEL_SERVICE_NAME || SERVICE_NAME
+}
 
 // Reporting is a no-op until an OTLP endpoint is configured via the standard
 // OTEL_EXPORTER_OTLP_* env vars. Point it at any OTLP-compatible backend.
 export function initObservability(): void {
   if (
-    provider ||
+    getProvider() ||
     !(process.env.OTEL_EXPORTER_OTLP_ENDPOINT || process.env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT)
   ) {
     return
   }
 
-  provider = new LoggerProvider({
+  const provider = new LoggerProvider({
     resource: resourceFromAttributes({
-      [ATTR_SERVICE_NAME]: process.env.OTEL_SERVICE_NAME || SERVICE_NAME,
+      [ATTR_SERVICE_NAME]: serviceName(),
     }),
-    processors: [new BatchLogRecordProcessor(new OTLPLogExporter())],
+    processors: [
+      new BatchLogRecordProcessor(new OTLPLogExporter({ timeoutMillis: EXPORT_TIMEOUT_MS })),
+    ],
   })
+  ;(globalThis as OtelGlobal)[PROVIDER_KEY] = provider
   logs.setGlobalLoggerProvider(provider)
 }
 
 export function captureError(error: unknown): void {
+  initObservability()
+  const provider = getProvider()
+  if (!provider) return
+
   const err = error instanceof Error ? error : new Error(String(error))
   const attributes: Record<string, string> = {
     [ATTR_EXCEPTION_TYPE]: err.name,
@@ -42,7 +59,7 @@ export function captureError(error: unknown): void {
     attributes[ATTR_EXCEPTION_STACKTRACE] = err.stack
   }
 
-  logs.getLogger(SERVICE_NAME).emit({
+  provider.getLogger(serviceName()).emit({
     severityNumber: SeverityNumber.ERROR,
     severityText: 'ERROR',
     body: err.message,
@@ -53,7 +70,7 @@ export function captureError(error: unknown): void {
 // Serverless runtimes may freeze before batched logs export; flush after capture.
 export async function flushObservability(): Promise<void> {
   try {
-    await provider?.forceFlush()
+    await getProvider()?.forceFlush()
   } catch (error) {
     // Export errors must not turn an otherwise handled API error into a failed response.
     // The OTLP exporter retries transient HTTP failures before forceFlush rejects.

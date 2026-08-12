@@ -129,13 +129,13 @@ export async function POST(req: NextRequest): Promise<Response> {
     return NextResponse.json({ error: 'Missing signature' }, { status: 401 })
   }
 
-  const rawBody = await req.text()
-
-  if (!verifyWebhookSignature(signature, rawBody, secret)) {
-    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
-  }
-
   try {
+    const rawBody = await req.text()
+
+    if (!verifyWebhookSignature(signature, rawBody, secret)) {
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
+    }
+
     const { addresses, chainId, blockNumber, blockTime, label } = parseWebhookBody(rawBody)
     if (addresses.length === 0) {
       return jsonResponseWithBigInt([])
