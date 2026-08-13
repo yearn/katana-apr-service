@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   mockGetVaults: vi.fn(),
   mockCalculateYearnVaultAPRs: vi.fn(),
   mockCalculateMorphoVaultAPRs: vi.fn(),
+  mockCalculateMorphoUnderlyingVaultAPRs: vi.fn(),
   mockCalculateSushiVaultAPRs: vi.fn(),
   logVaultAprDebug: vi.fn(),
 }))
@@ -24,6 +25,12 @@ vi.mock('./aprCalcs/yearnAprCalculator', () => ({
 vi.mock('./aprCalcs/morphoAprCalculator', () => ({
   MorphoAprCalculator: vi.fn().mockImplementation(() => ({
     calculateVaultAPRs: mocks.mockCalculateMorphoVaultAPRs,
+  })),
+}))
+
+vi.mock('./aprCalcs/morphoUnderlyingAprCalculator', () => ({
+  MorphoUnderlyingAprCalculator: vi.fn().mockImplementation(() => ({
+    calculateVaultAPRs: mocks.mockCalculateMorphoUnderlyingVaultAPRs,
   })),
 }))
 
@@ -58,10 +65,12 @@ describe('DataCacheService.generateVaultAPRData', () => {
     mocks.mockGetVaults.mockReset()
     mocks.mockCalculateYearnVaultAPRs.mockReset()
     mocks.mockCalculateMorphoVaultAPRs.mockReset()
+    mocks.mockCalculateMorphoUnderlyingVaultAPRs.mockReset()
     mocks.mockCalculateSushiVaultAPRs.mockReset()
     mocks.logVaultAprDebug.mockReset()
     mocks.mockCalculateYearnVaultAPRs.mockResolvedValue({})
     mocks.mockCalculateMorphoVaultAPRs.mockResolvedValue({})
+    mocks.mockCalculateMorphoUnderlyingVaultAPRs.mockResolvedValue({})
     mocks.mockCalculateSushiVaultAPRs.mockResolvedValue({})
   })
 
@@ -298,5 +307,449 @@ describe('DataCacheService.generateVaultAPRData', () => {
     expect(data[vault.address].strategies[0].underlyingContract).toBeNull()
     expect(data[vault.address].apr?.extra?.katanaAppRewardsAPR).toBe(0)
     expect(data[vault.address].apr?.extra?.katanaRewardsAPR).toBe(0)
+  })
+
+  it('uses a zero Kong oracle APR when an allocated strategy lacks a Morpho replacement', async () => {
+    const morphoStrategyAddress =
+      '0x00000000000000000000000000000000000000f1'
+    const steerStrategyAddress =
+      '0x00000000000000000000000000000000000000f2'
+    const idleStrategyAddress =
+      '0x00000000000000000000000000000000000000f3'
+    const vault = makeVault({
+      apr: {
+        netAPR: 0.0123,
+        fees: {
+          management: 0.02,
+          performance: 0.1,
+        },
+        forwardAPR: {
+          type: '',
+          netAPR: 0.025,
+          composite: {
+            boost: null,
+            poolAPY: null,
+            boostedAPR: null,
+            baseAPR: null,
+            cvxAPR: null,
+            rewardsAPR: null,
+          },
+        },
+      },
+      tvl: {
+        totalAssets: '100',
+        tvl: 100,
+        price: 1,
+      },
+      strategies: [
+        {
+          address: morphoStrategyAddress,
+          name: 'Morpho Yearn USDC Compounder',
+          status: 'active',
+          netAPR: 0.01,
+          details: {
+            totalDebt: '50',
+            totalGain: '0',
+            totalLoss: '0',
+            lastReport: 0,
+            debtRatio: 5000,
+          },
+        },
+        {
+          address: steerStrategyAddress,
+          name: 'Steer USDC Strategy',
+          status: 'active',
+          netAPR: 0,
+          details: {
+            totalDebt: '25',
+            totalGain: '0',
+            totalLoss: '0',
+            lastReport: 0,
+            debtRatio: 2500,
+          },
+        },
+        {
+          address: idleStrategyAddress,
+          name: 'Morpho Idle USDC Compounder',
+          status: 'unallocated',
+          netAPR: 0.50,
+          details: {
+            totalDebt: '0',
+            totalGain: '0',
+            totalLoss: '0',
+            lastReport: 0,
+          },
+        },
+      ],
+    })
+    mocks.mockGetVaults.mockResolvedValue([vault])
+    mocks.mockCalculateMorphoUnderlyingVaultAPRs.mockResolvedValue({
+      [vault.address]: [
+        {
+          strategyAddress: morphoStrategyAddress,
+          morphoVaultAddress:
+            '0x00000000000000000000000000000000000000a1',
+          morphoBaseAPR: 0.08,
+          morphoBaseAPY: 0.0832,
+          morphoRewardsAPR: 0.02,
+          replacementAPR: 0.10,
+          estimatedAPY: (1 + 0.10 / 52) ** 52 - 1,
+          usedMorphoApi: true,
+        },
+        {
+          strategyAddress: idleStrategyAddress,
+          morphoVaultAddress:
+            '0x00000000000000000000000000000000000000a2',
+          morphoBaseAPR: 0.20,
+          morphoBaseAPY: 0.22,
+          morphoRewardsAPR: 0.30,
+          replacementAPR: 0.50,
+          estimatedAPY: (1 + 0.50 / 52) ** 52 - 1,
+          usedMorphoApi: true,
+        },
+      ],
+    })
+
+    const service = new DataCacheService()
+    const data = await service.generateVaultAPRData()
+    const morphoGross = 0.10 * 0.5
+
+    expect(data[vault.address].apr?.netAPR).toBe(0.0123)
+    expect(data[vault.address].apr?.forwardAPR?.netAPR).toBeCloseTo(
+      morphoGross - (0.02 * 0.5 + morphoGross * 0.1),
+    )
+    expect(data[vault.address].apr?.forwardAPR?.morphoUnderlying).toEqual({
+      baseAPR: 0.08 * 0.5,
+      rewardsAPR: 0.02 * 0.5,
+      estimatedAPR: 0.10 * 0.5,
+      estimatedAPY: (1 + (0.10 * 0.5) / 52) ** 52 - 1,
+      coveredDebtRatio: 0.5,
+    })
+    expect(data[vault.address].strategies[0].netAPR).toBe(0.10)
+    expect(data[vault.address].strategies[1].netAPR).toBe(0)
+    expect(data[vault.address].strategies[2].netAPR).toBe(0.50)
+    expect(data[vault.address].strategies[0].morphoUnderlyingAPR).toEqual({
+      morphoVaultAddress: '0x00000000000000000000000000000000000000a1',
+      usedMorphoApi: true,
+      morphoBaseAPR: 0.08,
+      morphoBaseAPY: 0.0832,
+      morphoRewardsAPR: 0.02,
+      estimatedAPR: 0.10,
+      estimatedAPY: (1 + 0.10 / 52) ** 52 - 1,
+    })
+    expect(data[vault.address].strategies[1].morphoUnderlyingAPR).toBeUndefined()
+    expect(data[vault.address].strategies[2].morphoUnderlyingAPR).toEqual({
+      morphoVaultAddress: '0x00000000000000000000000000000000000000a2',
+      usedMorphoApi: true,
+      morphoBaseAPR: 0.20,
+      morphoBaseAPY: 0.22,
+      morphoRewardsAPR: 0.30,
+      estimatedAPR: 0.50,
+      estimatedAPY: (1 + 0.50 / 52) ** 52 - 1,
+    })
+  })
+
+  it('uses the Kong oracle APR when a Morpho estimate fails', async () => {
+    const morphoStrategyAddress =
+      '0x00000000000000000000000000000000000000f4'
+    const vault = makeVault({
+      apr: {
+        netAPR: 0.02,
+      },
+      tvl: {
+        totalAssets: '100',
+        tvl: 100,
+        price: 1,
+      },
+      strategies: [
+        {
+          address: morphoStrategyAddress,
+          name: 'Morpho Yearn USDC Compounder',
+          status: 'active',
+          netAPR: 0.03,
+          details: {
+            totalDebt: '50',
+            totalGain: '0',
+            totalLoss: '0',
+            lastReport: 0,
+            debtRatio: 5000,
+          },
+        },
+      ],
+    })
+    mocks.mockGetVaults.mockResolvedValue([vault])
+    mocks.mockCalculateMorphoUnderlyingVaultAPRs.mockResolvedValue({
+      [vault.address]: [
+        {
+          strategyAddress: morphoStrategyAddress,
+          morphoVaultAddress:
+            '0x00000000000000000000000000000000000000a2',
+          morphoBaseAPR: 0,
+          morphoBaseAPY: 0,
+          morphoRewardsAPR: 0,
+          replacementAPR: null,
+          estimatedAPY: null,
+          usedMorphoApi: false,
+        },
+      ],
+    })
+
+    const service = new DataCacheService()
+    const data = await service.generateVaultAPRData()
+
+    expect(data[vault.address].apr?.netAPR).toBe(0.02)
+    expect(data[vault.address].apr?.forwardAPR?.netAPR).toBeCloseTo(0.015)
+    expect(data[vault.address].strategies[0].netAPR).toBe(0.03)
+    expect(data[vault.address].strategies[0].morphoUnderlyingAPR).toMatchObject({
+      usedMorphoApi: false,
+      estimatedAPR: null,
+      estimatedAPY: null,
+    })
+  })
+
+  it('keeps forward APR unchanged when there are no Morpho replacement results', async () => {
+    const vault = makeVault({
+      apr: {
+        netAPR: 0.02,
+        forwardAPR: {
+          type: '',
+          netAPR: null,
+          composite: {
+            boost: null,
+            poolAPY: null,
+            boostedAPR: null,
+            baseAPR: null,
+            cvxAPR: null,
+            rewardsAPR: null,
+          },
+        },
+      },
+    })
+    mocks.mockGetVaults.mockResolvedValue([vault])
+    mocks.mockCalculateYearnVaultAPRs.mockResolvedValue({
+      [vault.address]: [
+        {
+          vaultName: vault.name,
+          vaultAddress: vault.address,
+          poolType: 'yearn',
+          breakdown: {
+            apr: 10,
+            token: {
+              address: '0x00000000000000000000000000000000000000bb',
+              symbol: 'KAT',
+              decimals: 18,
+            },
+            weight: 0,
+          },
+        },
+      ],
+    })
+
+    const service = new DataCacheService()
+    const data = await service.generateVaultAPRData()
+
+    expect(data[vault.address].apr?.forwardAPR?.netAPR).toBeNull()
+  })
+
+  it('caps total accountant fees at max fee percent of gross APR', async () => {
+    const morphoStrategyAddress =
+      '0x00000000000000000000000000000000000000f5'
+    const vault = makeVault({
+      apr: {
+        netAPR: 0.02,
+        fees: {
+          management: 0.009,
+          performance: 0,
+        },
+      },
+      tvl: {
+        totalAssets: '100',
+        tvl: 100,
+        price: 1,
+      },
+      strategies: [
+        {
+          address: morphoStrategyAddress,
+          name: 'Morpho Yearn USDC Compounder',
+          status: 'active',
+          netAPR: 0,
+          details: {
+            totalDebt: '100',
+            totalGain: '0',
+            totalLoss: '0',
+            lastReport: 0,
+            debtRatio: 10000,
+          },
+        },
+      ],
+    })
+    mocks.mockGetVaults.mockResolvedValue([vault])
+    mocks.mockCalculateMorphoUnderlyingVaultAPRs.mockResolvedValue({
+      [vault.address]: [
+        {
+          strategyAddress: morphoStrategyAddress,
+          morphoVaultAddress:
+            '0x00000000000000000000000000000000000000a3',
+          replacementAPR: 0.01,
+          usedMorphoApi: true,
+        },
+      ],
+    })
+
+    const service = new DataCacheService()
+    const data = await service.generateVaultAPRData()
+
+    expect(data[vault.address].apr?.forwardAPR?.netAPR).toBeCloseTo(0.005)
+  })
+
+  it('applies performance fee to gross APR without reducing management fee', async () => {
+    const morphoStrategyAddress =
+      '0x00000000000000000000000000000000000000f8'
+    const vault = makeVault({
+      apr: {
+        netAPR: 0.02,
+        fees: {
+          management: 0.02,
+          performance: 0.1,
+          maxFee: 0.5,
+        },
+      },
+      tvl: {
+        totalAssets: '100',
+        tvl: 100,
+        price: 1,
+      },
+      strategies: [
+        {
+          address: morphoStrategyAddress,
+          name: 'Morpho Yearn USDC Compounder',
+          status: 'active',
+          details: {
+            totalDebt: '100',
+            totalGain: '0',
+            totalLoss: '0',
+            lastReport: 0,
+            debtRatio: 10000,
+          },
+        },
+      ],
+    })
+    mocks.mockGetVaults.mockResolvedValue([vault])
+    mocks.mockCalculateMorphoUnderlyingVaultAPRs.mockResolvedValue({
+      [vault.address]: [
+        {
+          strategyAddress: morphoStrategyAddress,
+          morphoVaultAddress:
+            '0x00000000000000000000000000000000000000a6',
+          replacementAPR: 0.08,
+          usedMorphoApi: true,
+        },
+      ],
+    })
+
+    const service = new DataCacheService()
+    const data = await service.generateVaultAPRData()
+
+    expect(data[vault.address].apr?.forwardAPR?.netAPR).toBeCloseTo(0.052)
+  })
+
+  it('returns zero forward APR for zero or negative gross APR before fees', async () => {
+    const morphoStrategyAddress =
+      '0x00000000000000000000000000000000000000f6'
+    const vault = makeVault({
+      apr: {
+        netAPR: 0.02,
+        fees: {
+          management: 0.01,
+          performance: 0.2,
+        },
+      },
+      tvl: {
+        totalAssets: '100',
+        tvl: 100,
+        price: 1,
+      },
+      strategies: [
+        {
+          address: morphoStrategyAddress,
+          name: 'Morpho Yearn USDC Compounder',
+          status: 'active',
+          details: {
+            totalDebt: '100',
+            totalGain: '0',
+            totalLoss: '0',
+            lastReport: 0,
+            debtRatio: 10000,
+          },
+        },
+      ],
+    })
+    mocks.mockGetVaults.mockResolvedValue([vault])
+    mocks.mockCalculateMorphoUnderlyingVaultAPRs.mockResolvedValue({
+      [vault.address]: [
+        {
+          strategyAddress: morphoStrategyAddress,
+          morphoVaultAddress:
+            '0x00000000000000000000000000000000000000a4',
+          replacementAPR: -0.01,
+          usedMorphoApi: true,
+        },
+      ],
+    })
+
+    const service = new DataCacheService()
+    const data = await service.generateVaultAPRData()
+
+    expect(data[vault.address].apr?.forwardAPR?.netAPR).toBe(0)
+  })
+
+  it('treats missing or non-finite fee values as zero fees', async () => {
+    const morphoStrategyAddress =
+      '0x00000000000000000000000000000000000000f7'
+    const vault = makeVault({
+      apr: {
+        netAPR: 0.02,
+        fees: {
+          management: Number.NaN,
+          performance: Number.POSITIVE_INFINITY,
+        },
+      },
+      tvl: {
+        totalAssets: '100',
+        tvl: 100,
+        price: 1,
+      },
+      strategies: [
+        {
+          address: morphoStrategyAddress,
+          name: 'Morpho Yearn USDC Compounder',
+          status: 'active',
+          details: {
+            totalDebt: '100',
+            totalGain: '0',
+            totalLoss: '0',
+            lastReport: 0,
+            debtRatio: 10000,
+          },
+        },
+      ],
+    })
+    mocks.mockGetVaults.mockResolvedValue([vault])
+    mocks.mockCalculateMorphoUnderlyingVaultAPRs.mockResolvedValue({
+      [vault.address]: [
+        {
+          strategyAddress: morphoStrategyAddress,
+          morphoVaultAddress:
+            '0x00000000000000000000000000000000000000a5',
+          replacementAPR: 0.07,
+          usedMorphoApi: true,
+        },
+      ],
+    })
+
+    const service = new DataCacheService()
+    const data = await service.generateVaultAPRData()
+
+    expect(data[vault.address].apr?.forwardAPR?.netAPR).toBeCloseTo(0.07)
   })
 })

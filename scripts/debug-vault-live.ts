@@ -9,6 +9,7 @@ const CHAIN_ID = Number.parseInt(process.env.KATANA_CHAIN_ID ?? '747474', 10)
 const YEARN_API_URL = process.env.YDAEMON_BASE_URI || 'https://ydaemon.yearn.fi'
 const DEFAULT_MERKL_API_URL = 'https://api.merkl.xyz'
 const MERKL_API_URL = process.env.MERKL_BASE_URI || 'https://api.merkl.xyz'
+const MERKL_API_KEY = process.env.MERKL_API_KEY?.trim() || undefined
 const MERKL_FALLBACK_URLS = [
   'https://api.merkl.fr',
   'https://api-merkl.angle.money',
@@ -333,15 +334,23 @@ const fetchMerklOpportunities = async (): Promise<MerklOpportunity[]> => {
     type: 'ERC20LOGPROCESSOR',
     campaigns: 'true',
   })
+  const requestInit: RequestInit | undefined = MERKL_API_KEY
+    ? {
+        headers: {
+          'X-API-Key': MERKL_API_KEY,
+        },
+      }
+    : undefined
   let lastError: unknown
 
   for (let index = 0; index < MERKL_API_URLS.length; index += 1) {
     const apiUrl = MERKL_API_URLS[index]
 
     try {
-      const response = await fetch(
-        `${apiUrl}/v4/opportunities?${searchParams}`,
-      )
+      const requestUrl = `${apiUrl}/v4/opportunities?${searchParams}`
+      const response = requestInit
+        ? await fetch(requestUrl, requestInit)
+        : await fetch(requestUrl)
 
       if (!response.ok) {
         const httpError = Object.assign(

@@ -33,7 +33,7 @@ export class YearnAprCalculator implements APRCalculator {
     vaults: YearnVault[]
   ): Promise<Record<string, RewardCalculatorResult[]>> {
     const yearnOpportunities =
-      await this.merklApi.getErc20LogProcessorOpportunities()
+      await this.merklApi.getYearnVaultRewardOpportunities()
 
     // Calculate APRs for each vault
     const resultEntries = vaults.map((vault) => {

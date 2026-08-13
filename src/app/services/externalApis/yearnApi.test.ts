@@ -13,6 +13,7 @@ vi.mock('../aprCalcs/debugLogger', () => ({
 }))
 
 import { YearnApiService } from './yearnApi'
+import type { YearnVault } from '../../types'
 
 const makeOkResponse = (data: unknown) =>
   Promise.resolve({
@@ -57,7 +58,7 @@ describe('YearnApiService', () => {
           name: 'vbUSDC yVault',
           symbol: 'yvvbUSDC',
           totalAssets: '1000000',
-          totalDebt: '100',
+          totalDebt: '800000',
           asset: {
             address: '0x00000000000000000000000000000000000000cc',
             name: 'Vault Bridge USDC',
@@ -88,10 +89,17 @@ describe('YearnApiService', () => {
               address: '0x00000000000000000000000000000000000000dd',
               name: 'Morpho Strategy',
               status: 'active',
-              currentDebt: '42',
+              currentDebt: '640000',
               totalGain: '2',
               totalLoss: '1',
               lastReport: '123',
+              latestReportApr: 0.75,
+              performance: {
+                oracle: {
+                  apr: 0,
+                  apy: 0,
+                },
+              },
               performanceFee: '0',
             },
           ],
@@ -116,6 +124,7 @@ describe('YearnApiService', () => {
         fees: {
           management: 0.0025,
           performance: 0.1,
+          maxFee: 0.5,
         },
         pricePerShare: {
           today: 1,
@@ -134,17 +143,17 @@ describe('YearnApiService', () => {
         address: '0x00000000000000000000000000000000000000dd',
         name: 'Morpho Strategy',
         status: 'active',
-        netAPR: null,
+        netAPR: 0,
         strategyRewardsAPR: null,
         rewardToken: null,
         underlyingContract: null,
         details: {
-          totalDebt: '42',
+          totalDebt: '640000',
           totalGain: '2',
           totalLoss: '1',
           lastReport: 123,
           performanceFee: 0,
-          debtRatio: 4200,
+          debtRatio: 6400,
         },
       },
     ])
@@ -155,5 +164,66 @@ describe('YearnApiService', () => {
         reason: 'fetched_from_kong',
       }),
     )
+  })
+
+  it('selects allocated and unallocated Morpho compounders for estimates', () => {
+    const vault: YearnVault = {
+      address: '0x00000000000000000000000000000000000000aa',
+      symbol: 'yvvbUSDC',
+      name: 'USDC yVault',
+      chainID: 747474,
+      apr: {
+        netAPR: 0,
+      },
+      strategies: [
+        {
+          address: '0x0000000000000000000000000000000000000001',
+          name: 'Morpho Yearn USDC Compounder',
+          details: {
+            totalDebt: '100',
+            totalGain: '0',
+            totalLoss: '0',
+            lastReport: 0,
+          },
+        },
+        {
+          address: '0x0000000000000000000000000000000000000002',
+          name: 'Morpho vbWBTC/yvUSDC Lender Borrower',
+          details: {
+            totalDebt: '100',
+            totalGain: '0',
+            totalLoss: '0',
+            lastReport: 0,
+          },
+        },
+        {
+          address: '0x0000000000000000000000000000000000000003',
+          name: 'Morpho Inactive USDC Compounder',
+          details: {
+            totalDebt: '0',
+            totalGain: '0',
+            totalLoss: '0',
+            lastReport: 0,
+          },
+        },
+        {
+          address: '0x0000000000000000000000000000000000000004',
+          name: 'Steer USDC Compounder',
+          details: {
+            totalDebt: '100',
+            totalGain: '0',
+            totalLoss: '0',
+            lastReport: 0,
+          },
+        },
+      ],
+    }
+
+    const service = new YearnApiService()
+
+    expect(service.getMorphoCompounderStrategies(vault)).toEqual([
+      '0x0000000000000000000000000000000000000001',
+      '0x0000000000000000000000000000000000000003',
+    ])
   })
 })

@@ -28,8 +28,11 @@ type KongVaultCompositionItem = {
   totalLoss?: string
   lastReport?: string | number
   performanceFee?: string | number
-  latestReportApr?: number | null
   performance?: {
+    oracle?: {
+      apr?: number | null
+      apy?: number | null
+    }
     estimated?: {
       components?: Record<string, number | string | null>
     }
@@ -81,6 +84,7 @@ type KongVaultSnapshot = {
   fees?: {
     managementFee?: number
     performanceFee?: number
+    maxFee?: number
   } | null
   composition?: KongVaultCompositionItem[]
 }
@@ -116,6 +120,7 @@ const toStringValue = (value: unknown, fallback = '0'): string =>
   value === null || value === undefined ? fallback : String(value)
 
 const normalizeBasisPoints = (value: unknown): number => toNumber(value) / 10_000
+const KATANA_ACCOUNTANT_DEFAULT_MAX_FEE_BPS = 5_000
 
 const normalizeShareValue = (
   value: unknown,
@@ -134,17 +139,17 @@ const normalizeShareValue = (
 
 const calculateDebtRatio = (
   strategyDebt: unknown,
-  vaultDebt: unknown,
+  vaultTotalAssets: unknown,
 ): number | undefined => {
   try {
     const debt = BigInt(String(strategyDebt ?? '0'))
-    const totalDebt = BigInt(String(vaultDebt ?? '0'))
-    if (debt <= BigInt(0) || totalDebt <= BigInt(0)) {
+    const totalAssets = BigInt(String(vaultTotalAssets ?? '0'))
+    if (debt <= BigInt(0) || totalAssets <= BigInt(0)) {
       return undefined
     }
 
     return Number(
-      (debt * BigInt(10_000) + totalDebt / BigInt(2)) / totalDebt,
+      (debt * BigInt(10_000) + totalAssets / BigInt(2)) / totalAssets,
     )
   } catch {
     return undefined
@@ -158,11 +163,6 @@ const calculateTokenPrice = (
 ): number => {
   const normalizedAssets = normalizeShareValue(totalAssets, decimals)
   return normalizedAssets > 0 ? tvl / normalizedAssets : 0
-}
-
-const toPositiveFiniteNumberOrNull = (value: unknown): number | null => {
-  const parsed = toFiniteNumberOrNull(value)
-  return parsed && parsed > 0 ? parsed : null
 }
 
 const isKatanaYearnVault = (vault: KongVaultListItem): boolean =>
@@ -203,7 +203,7 @@ const mapKongCompositionToYearnStrategy = (
     lastReport: toNumber(strategy.lastReport),
     performanceFee: toNumber(strategy.performanceFee),
   }
-  const debtRatio = calculateDebtRatio(totalDebt, snapshot.totalDebt)
+  const debtRatio = calculateDebtRatio(totalDebt, snapshot.totalAssets)
   if (debtRatio !== undefined) {
     details.debtRatio = debtRatio
   }
@@ -212,7 +212,9 @@ const mapKongCompositionToYearnStrategy = (
     address: strategy.address,
     name: strategy.name || 'Unknown',
     status: totalDebt === '0' ? 'unallocated' : strategy.status,
-    netAPR: toPositiveFiniteNumberOrNull(strategy.latestReportApr),
+    // Use Kong's on-chain APR oracle output, including a valid zero. Do not use
+    // latestReportApr, which is historical and can be stale in compositions.
+    netAPR: toFiniteNumberOrNull(strategy.performance?.oracle?.apr),
     strategyRewardsAPR: estimatedKatRewardsAPR,
     rewardToken:
       estimatedKatRewardsAPR !== null && estimatedKatRewardsAPR > 0
@@ -245,6 +247,9 @@ const mapKongAprToYearnApr = (snapshot: KongVaultSnapshot): YearnVaultAPY => {
       ? {
           management: normalizeBasisPoints(snapshot.fees.managementFee),
           performance: normalizeBasisPoints(snapshot.fees.performanceFee),
+          maxFee: normalizeBasisPoints(
+            snapshot.fees.maxFee ?? KATANA_ACCOUNTANT_DEFAULT_MAX_FEE_BPS,
+          ),
         }
       : undefined,
     points: {
@@ -421,6 +426,18 @@ export class YearnApiService {
             strategy.details?.totalDebt &&
             strategy.details.totalDebt !== '0' &&
             strategy.details.totalDebt !== '0x0'
+        )
+      )
+      .map((strategy): string => strategy.address)
+  }
+
+  getMorphoCompounderStrategies(vault: YearnVault): string[] {
+    return vault.strategies
+      .filter((strategy): boolean =>
+        Boolean(
+          strategy.name?.includes('Morpho') &&
+            strategy.name?.includes('Compounder') &&
+            !strategy.name?.includes('Lender Borrower')
         )
       )
       .map((strategy): string => strategy.address)

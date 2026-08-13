@@ -34,6 +34,7 @@ interface ParsedWebhookBody {
 }
 
 const STRATEGY_APR_COMPONENT = 'katRewardsAPR'
+const COMPOUNDING_PERIODS_PER_YEAR = 52
 
 function verifyWebhookSignature(
   signatureHeader: string,
@@ -99,21 +100,78 @@ function buildStrategyOutputs(
 ): KongOutput[] {
   return strategies.flatMap((strategy) => {
     const address = strategy.address
-    const value = toFiniteNumber(strategy.strategyRewardsAPR)
-
-    if (!address || value == null) {
+    if (!address) {
       return []
     }
 
-    return [
-      {
+    const outputs: KongOutput[] = []
+    const estimatedAPR = toFiniteNumber(
+      strategy.morphoUnderlyingAPR?.estimatedAPR,
+    )
+    const estimatedAPY = toFiniteNumber(
+      strategy.morphoUnderlyingAPR?.estimatedAPY,
+    )
+    const katRewardsAPR = toFiniteNumber(strategy.strategyRewardsAPR)
+
+    if (estimatedAPR != null) {
+      outputs.push({
+        ...base,
+        address,
+        component: 'netAPR',
+        value: estimatedAPR,
+      })
+    }
+
+    if (estimatedAPY != null) {
+      outputs.push({
+        ...base,
+        address,
+        component: 'netAPY',
+        value: estimatedAPY,
+      })
+    }
+
+    if (katRewardsAPR != null) {
+      outputs.push({
         ...base,
         address,
         component: STRATEGY_APR_COMPONENT,
-        value,
-      },
-    ]
+        value: katRewardsAPR,
+      })
+    }
+
+    return outputs
   })
+}
+
+function buildForwardAPROutputs(
+  address: string,
+  forwardNetAPR: number | null | undefined,
+  base: Omit<KongOutput, 'address' | 'component' | 'value'>,
+): KongOutput[] {
+  const netAPR = toFiniteNumber(forwardNetAPR)
+
+  if (netAPR == null) {
+    return []
+  }
+
+  return [
+    {
+      ...base,
+      address,
+      component: 'netAPR',
+      value: netAPR,
+    },
+    {
+      ...base,
+      address,
+      component: 'netAPY',
+      value:
+        (1 + netAPR / COMPOUNDING_PERIODS_PER_YEAR) **
+          COMPOUNDING_PERIODS_PER_YEAR -
+        1,
+    },
+  ]
 }
 
 export async function POST(req: NextRequest): Promise<Response> {
@@ -155,6 +213,13 @@ export async function POST(req: NextRequest): Promise<Response> {
         outputs.push({ ...base, address, component, value: extra[component] ?? 0 })
       }
 
+      outputs.push(
+        ...buildForwardAPROutputs(
+          address,
+          vault.apr?.forwardAPR?.netAPR,
+          base,
+        ),
+      )
       outputs.push(...buildStrategyOutputs(vault.strategies || [], base))
     }
 
