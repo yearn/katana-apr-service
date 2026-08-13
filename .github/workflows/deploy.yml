@@ -31,5 +31,9 @@ jobs:
         YDAEMON_BASE_URI=katana-apr-service/YDAEMON_BASE_URI
         MERKL_BASE_URI=katana-apr-service/MERKL_BASE_URI
         MERKL_API_KEY=katana-apr-service/MERKL_API_KEY
+        OTEL_EXPORTER_OTLP_ENDPOINT=katana-apr-service/OTEL_EXPORTER_OTLP_ENDPOINT
+        OTEL_EXPORTER_OTLP_HEADERS=katana-apr-service/OTEL_EXPORTER_OTLP_HEADERS
+        OTEL_SERVICE_NAME=katana-apr-service/OTEL_SERVICE_NAME
+        OTEL_EXPORTER_OLTP_LOGS_ENDPOINT=katana-apr-service/OTEL_EXPORTER_OLTP_LOGS_ENDPOINT
     secrets:
       OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
