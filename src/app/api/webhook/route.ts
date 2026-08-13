@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createHmac, timingSafeEqual } from 'node:crypto'
+import { captureError, flushObservability } from '../../../observability'
 
 import { DataCacheService } from '../../services/dataCache'
 import type { YearnStrategy, YearnVaultExtra } from '../../types/yearn'
@@ -176,6 +177,8 @@ function buildForwardAPROutputs(
 export async function POST(req: NextRequest): Promise<Response> {
   const secret = process.env.KONG_WEBHOOK_SECRET
   if (!secret) {
+    captureError(new Error('webhook secret not configured'))
+    await flushObservability()
     return NextResponse.json({ error: 'webhook secret not configured' }, { status: 500 })
   }
 
@@ -184,13 +187,13 @@ export async function POST(req: NextRequest): Promise<Response> {
     return NextResponse.json({ error: 'Missing signature' }, { status: 401 })
   }
 
-  const rawBody = await req.text()
-
-  if (!verifyWebhookSignature(signature, rawBody, secret)) {
-    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
-  }
-
   try {
+    const rawBody = await req.text()
+
+    if (!verifyWebhookSignature(signature, rawBody, secret)) {
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
+    }
+
     const { addresses, chainId, blockNumber, blockTime, label } = parseWebhookBody(rawBody)
     if (addresses.length === 0) {
       return jsonResponseWithBigInt([])
@@ -224,6 +227,8 @@ export async function POST(req: NextRequest): Promise<Response> {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     console.error(`Webhook error: ${message}`, { error })
+    captureError(error)
+    await flushObservability()
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
