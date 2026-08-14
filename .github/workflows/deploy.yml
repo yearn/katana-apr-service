@@ -13,27 +13,11 @@ permissions:
   contents: read
   deployments: write
   pull-requests: write
+  id-token: write
 
 jobs:
   deploy:
-    uses: yearn/yearn-gha/.github/workflows/vercel-deploy.yml@711efc3dc97f65bbf6d6045d593732a935171e32
+    uses: yearn/yearn-gha/.github/workflows/vercel-deploy.yml@9701cd661a98fda358bb7b273b2baab97f12dea2
     with:
-      vault: webops-prod-katana-apr-service
-      environment: ${{ github.event_name == 'pull_request' && 'preview' || 'production' }}
-      secrets: |
-        KONG_BASE_URI=katana-apr-service/KONG_BASE_URI
-        KONG_WEBHOOK_SECRET=katana-apr-service/KONG_WEBHOOK_SECRET
-        COINGECKO_API_KEY=katana-apr-service/COINGECKO_API_KEY
-        RPC_URL_KATANA=katana-apr-service/RPC_URL_KATANA
-        COINGECKO_BASE_URI=katana-apr-service/COINGECKO_BASE_URI
-        COINGECKO_KATANA_COIN_ID=katana-apr-service/COINGECKO_KATANA_COIN_ID
-        KATANA_APR_SERVICE_API=katana-apr-service/KATANA_APR_SERVICE_API
-        YDAEMON_BASE_URI=katana-apr-service/YDAEMON_BASE_URI
-        MERKL_BASE_URI=katana-apr-service/MERKL_BASE_URI
-        MERKL_API_KEY=katana-apr-service/MERKL_API_KEY
-        OTEL_EXPORTER_OTLP_ENDPOINT=katana-apr-service/OTEL_EXPORTER_OTLP_ENDPOINT
-        OTEL_EXPORTER_OTLP_HEADERS=katana-apr-service/OTEL_EXPORTER_OTLP_HEADERS
-        OTEL_SERVICE_NAME=katana-apr-service/OTEL_SERVICE_NAME
-        OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=katana-apr-service/OTEL_EXPORTER_OTLP_LOGS_ENDPOINT
-    secrets:
-      OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+      project: katana-apr-service
+      identity-id: ${{ github.event_name == 'pull_request' && vars.DOPPLER_PREVIEW_IDENTITY_ID || vars.DOPPLER_PRODUCTION_IDENTITY_ID }}
