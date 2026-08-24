@@ -345,6 +345,16 @@ From `DataCacheService.generateVaultAPRData()`:
 
 Notes:
 
+- A service-computed `forwardAPR` uses `type: "katana-estimated-apr"` and
+  contains `netAPR` plus the optional `morphoUnderlying` breakdown. The
+  Curve-shaped `forwardAPR.composite` object is not returned. When the service
+  cannot compute a replacement, it preserves the upstream `forwardAPR.type`.
+- Strategy-level `morphoUnderlyingAPR.grossAPR` and `grossAPY` are the Morpho
+  base and non-KAT reward estimate before vault fees. The vault-level
+  `forwardAPR.morphoUnderlying.grossAPR` and `grossAPY` are the debt-weighted
+  versions of those gross values.
+- `forwardAPR.netAPR` remains the fee-adjusted vault estimate. Historical
+  `apr.netAPR` is unchanged.
 - `katanaAppRewardsAPR` continues to come from Yearn vault-level Merkl APR breakdowns.
 - `fixedRateKatanaRewards` is kept as a legacy compatibility field, but fixed-rate KAT rewards have ended and the service now returns `0`.
 - `katanaBonusAPY` remains `0`.
@@ -406,6 +416,8 @@ Notes:
   - `katanaNativeYield`
   - `steerPointsPerDollar` (legacy, always `0`)
 - Also emits strategy-addressed `katRewardsAPR` rows for strategies where `strategyRewardsAPR` is present, reusing the incoming estimated-APR label so Kong can hydrate them onto vault composition entries.
+- The `/api/vaults` gross-field rename does not change webhook component names
+  or values.
 
 ### `GET /api/health`
 

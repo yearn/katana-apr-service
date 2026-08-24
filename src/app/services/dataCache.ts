@@ -215,8 +215,8 @@ export class DataCacheService {
                 morphoBaseAPR: morphoUnderlying.morphoBaseAPR,
                 morphoBaseAPY: morphoUnderlying.morphoBaseAPY,
                 morphoRewardsAPR: morphoUnderlying.morphoRewardsAPR,
-                estimatedAPR: morphoUnderlying.replacementAPR,
-                estimatedAPY: morphoUnderlying.estimatedAPY,
+                grossAPR: morphoUnderlying.replacementAPR,
+                grossAPY: morphoUnderlying.estimatedAPY,
               },
             }
           : {}),
@@ -343,16 +343,8 @@ export class DataCacheService {
     }, 0)
 
     return {
-      type: vault.apr?.forwardAPR?.type || '',
+      type: 'katana-estimated-apr',
       netAPR,
-      composite: vault.apr?.forwardAPR?.composite || {
-        boost: null,
-        poolAPY: null,
-        boostedAPR: null,
-        baseAPR: null,
-        cvxAPR: null,
-        rewardsAPR: null,
-      },
       morphoUnderlying: this.buildVaultMorphoUnderlyingAPR(
         vault,
         liveMorphoResults,
@@ -384,21 +376,21 @@ export class DataCacheService {
 
         accumulator.baseAPR += result.morphoBaseAPR * debtShare
         accumulator.rewardsAPR += result.morphoRewardsAPR * debtShare
-        accumulator.estimatedAPR += result.replacementAPR * debtShare
+        accumulator.grossAPR += result.replacementAPR * debtShare
         accumulator.coveredDebtRatio += debtShare
         return accumulator
       },
       {
         baseAPR: 0,
         rewardsAPR: 0,
-        estimatedAPR: 0,
+        grossAPR: 0,
         coveredDebtRatio: 0,
       },
     )
 
     return {
       ...weighted,
-      estimatedAPY: this.convertAprToWeeklyApy(weighted.estimatedAPR),
+      grossAPY: this.convertAprToWeeklyApy(weighted.grossAPR),
     }
   }
 
