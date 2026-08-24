@@ -366,6 +366,26 @@ export class DataCacheService {
       MorphoUnderlyingAprResult & { replacementAPR: number }
     >,
   ): NonNullable<YearnVaultAPY['forwardAPR']>['morphoUnderlying'] {
+    const liveMorphoStrategyAddresses = new Set(
+      morphoUnderlyingResults.map((result) =>
+        result.strategyAddress.toLowerCase(),
+      ),
+    )
+    const { coveredDebt, totalActiveDebt } = vault.strategies.reduce(
+      (accumulator, strategy) => {
+        const strategyDebt = this.getStrategyDebt(strategy)
+        if (strategyDebt <= BigInt(0)) {
+          return accumulator
+        }
+
+        accumulator.totalActiveDebt += strategyDebt
+        if (liveMorphoStrategyAddresses.has(strategy.address.toLowerCase())) {
+          accumulator.coveredDebt += strategyDebt
+        }
+        return accumulator
+      },
+      { coveredDebt: BigInt(0), totalActiveDebt: BigInt(0) },
+    )
     const weighted = morphoUnderlyingResults.reduce(
       (accumulator, result) => {
         const strategy = vault.strategies.find(
@@ -383,22 +403,26 @@ export class DataCacheService {
         }
 
         accumulator.baseAPR += result.morphoBaseAPR * debtShare
+        accumulator.baseAPY += result.morphoBaseAPY * debtShare
         accumulator.rewardsAPR += result.morphoRewardsAPR * debtShare
         accumulator.estimatedAPR += result.replacementAPR * debtShare
-        accumulator.coveredDebtRatio += debtShare
         return accumulator
       },
       {
         baseAPR: 0,
+        baseAPY: 0,
         rewardsAPR: 0,
         estimatedAPR: 0,
-        coveredDebtRatio: 0,
       },
     )
 
     return {
       ...weighted,
       estimatedAPY: this.convertAprToWeeklyApy(weighted.estimatedAPR),
+      coveredDebtRatio:
+        totalActiveDebt > BigInt(0)
+          ? Number(coveredDebt) / Number(totalActiveDebt)
+          : 1,
     }
   }
 
@@ -445,8 +469,8 @@ export class DataCacheService {
       return debtRatio / 10_000
     }
 
+    const strategyDebt = this.getStrategyDebt(strategy)
     try {
-      const strategyDebt = BigInt(String(strategy.details?.totalDebt ?? '0'))
       const vaultTotalAssets = BigInt(String(vault.tvl?.totalAssets ?? '0'))
       if (strategyDebt <= BigInt(0) || vaultTotalAssets <= BigInt(0)) {
         return 0
@@ -455,6 +479,15 @@ export class DataCacheService {
       return Number(strategyDebt) / Number(vaultTotalAssets)
     } catch {
       return 0
+    }
+  }
+
+  private getStrategyDebt(strategy: YearnStrategy): bigint {
+    try {
+      const strategyDebt = BigInt(String(strategy.details?.totalDebt ?? '0'))
+      return strategyDebt > BigInt(0) ? strategyDebt : BigInt(0)
+    } catch {
+      return BigInt(0)
     }
   }
 
