@@ -341,6 +341,36 @@ Snippet:
 
 ### 5) Service output shape (post-TGE computed extras)
 
+#### Morpho forward-estimate ladder
+
+Resolved Morpho compounder strategies select the first available estimate in
+this order:
+
+1. Morpho API base APY plus non-KAT rewards APR.
+2. Merkl rewards matched to the resolved Morpho vault address.
+3. Merkl rewards matched to the strategy address.
+4. Kong's on-chain strategy APR oracle, including an explicit zero.
+
+Merkl matching considers live `MORPHOVAULT` opportunities first and then live
+`ERC20LOGPROCESSOR` opportunities at the same exact address. Only campaigns
+that remain after blacklist filtering, pay a non-KAT token, and have a matching
+APR breakdown contribute. Merkl breakdowns are percentages and are divided by
+`100` before use. The Kong oracle APR acts as the base proxy for a Merkl
+fallback; when it is unavailable, the Merkl rewards APR stands alone.
+
+`strategies[].morphoUnderlyingAPR.morphoEstimateSource` discloses the selected
+source numerically:
+
+- `0`: Morpho API
+- `1`: Merkl at the underlying Morpho vault address
+- `2`: Merkl at the strategy address
+- `3`: Kong oracle
+
+Sources `0` through `2` count toward `estimatedDebtCoverage`. Source `3` keeps
+the vault forward estimate complete but does not count as real-estimate
+coverage. A strategy with no finite value from any rung can still cause the
+vault calculation to retain the upstream forward APR.
+
 From `DataCacheService.generateVaultAPRData()`:
 
 Notes:
@@ -406,8 +436,9 @@ Notes:
   - `katanaNativeYield`
   - `steerPointsPerDollar` (legacy, always `0`)
 - Also emits strategy-addressed `katRewardsAPR` rows for strategies where `strategyRewardsAPR` is present, reusing the incoming estimated-APR label so Kong can hydrate them onto vault composition entries.
-- When live Morpho estimates contribute to a vault forward APR, also emits these vault-addressed diagnostics:
-  - `estimatedDebtCoverage`: share of total active strategy debt backed by live Morpho estimates; oracle-fallback debt is excluded
+- Emits strategy-addressed `morphoEstimateSource` alongside each finite Morpho forward estimate.
+- When Morpho API or Merkl estimates contribute to a vault forward APR, also emits these vault-addressed diagnostics:
+  - `estimatedDebtCoverage`: share of total active strategy debt backed by Morpho API or Merkl estimates; oracle-fallback debt is excluded
   - `morphoBaseAPY`: vault-asset-weighted Morpho base APY contribution
   - `morphoRewardsAPR`: vault-asset-weighted non-KAT Morpho rewards APR contribution
 - Diagnostic rows use the same finite-number guard as other estimated rows: explicit zero values are emitted, while non-finite values are omitted.

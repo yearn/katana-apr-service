@@ -14,9 +14,20 @@ export interface YearnRewardToken {
   assumedFDV?: number
 }
 
+export const MORPHO_ESTIMATE_SOURCE = {
+  MORPHO_API: 0,
+  MERKL_UNDERLYING: 1,
+  MERKL_STRATEGY: 2,
+  KONG_ORACLE: 3,
+} as const
+
+export type MorphoEstimateSource =
+  (typeof MORPHO_ESTIMATE_SOURCE)[keyof typeof MORPHO_ESTIMATE_SOURCE]
+
 export interface MorphoUnderlyingAPR {
   morphoVaultAddress: string | null
   usedMorphoApi: boolean
+  morphoEstimateSource: MorphoEstimateSource | null
   morphoBaseAPR: number
   morphoBaseAPY: number
   morphoRewardsAPR: number

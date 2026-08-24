@@ -1,6 +1,7 @@
 import { createHmac } from 'node:crypto'
 import { NextRequest } from 'next/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { MORPHO_ESTIMATE_SOURCE } from '../../types/yearn'
 
 const mocks = vi.hoisted(() => ({
   mockGenerateVaultAPRData: vi.fn(),
@@ -84,6 +85,7 @@ describe('/api/webhook route', () => {
               morphoVaultAddress:
                 '0x00000000000000000000000000000000000000ee',
               usedMorphoApi: true,
+              morphoEstimateSource: MORPHO_ESTIMATE_SOURCE.MORPHO_API,
               morphoBaseAPR: 0.04,
               morphoBaseAPY: 0.0408,
               morphoRewardsAPR: 0.02,
@@ -241,6 +243,15 @@ describe('/api/webhook route', () => {
         chainId: 747474,
         address: STRATEGY_ADDRESS,
         label: 'katana',
+        component: 'morphoEstimateSource',
+        value: MORPHO_ESTIMATE_SOURCE.MORPHO_API,
+        blockNumber: '123',
+        blockTime: '456',
+      },
+      {
+        chainId: 747474,
+        address: STRATEGY_ADDRESS,
+        label: 'katana',
         component: 'katRewardsAPR',
         value: 0.123,
         blockNumber: '123',
@@ -306,6 +317,7 @@ describe('/api/webhook route', () => {
               morphoVaultAddress:
                 '0x00000000000000000000000000000000000000e1',
               usedMorphoApi: true,
+              morphoEstimateSource: MORPHO_ESTIMATE_SOURCE.MORPHO_API,
               morphoBaseAPR: 0,
               morphoBaseAPY: 0,
               morphoRewardsAPR: 0,
@@ -321,6 +333,7 @@ describe('/api/webhook route', () => {
               morphoVaultAddress:
                 '0x00000000000000000000000000000000000000e2',
               usedMorphoApi: true,
+              morphoEstimateSource: MORPHO_ESTIMATE_SOURCE.MORPHO_API,
               morphoBaseAPR: 0,
               morphoBaseAPY: 0,
               morphoRewardsAPR: 0,
@@ -367,6 +380,15 @@ describe('/api/webhook route', () => {
       blockNumber: '123',
       blockTime: '456',
     })
+    expect(body).toContainEqual({
+      chainId: 747474,
+      address: zeroEstimateAddress,
+      label: 'katana-estimated-apr',
+      component: 'morphoEstimateSource',
+      value: MORPHO_ESTIMATE_SOURCE.MORPHO_API,
+      blockNumber: '123',
+      blockTime: '456',
+    })
     expect(body).not.toContainEqual(
       expect.objectContaining({
         address: zeroEstimateAddress,
@@ -383,6 +405,12 @@ describe('/api/webhook route', () => {
       expect.objectContaining({
         address: invalidEstimateAddress,
         component: 'netAPY',
+      }),
+    )
+    expect(body).not.toContainEqual(
+      expect.objectContaining({
+        address: invalidEstimateAddress,
+        component: 'morphoEstimateSource',
       }),
     )
     expect(body).toContainEqual({

@@ -1,7 +1,9 @@
 import _ from 'lodash'
 import { config } from '../config/index'
 import type { YearnStrategy, YearnVault, YearnVaultAPY } from '../types/index'
+import { MORPHO_ESTIMATE_SOURCE } from '../types/index'
 import { YearnApiService } from './externalApis/yearnApi'
+import { MerklApiService } from './externalApis/merklApi'
 import { MorphoAprCalculator } from './aprCalcs/morphoAprCalculator'
 import {
   MorphoUnderlyingAprCalculator,
@@ -40,6 +42,7 @@ const KATANA_ACCOUNTANT_DEFAULT_MAX_FEE = 0.5
 
 export class DataCacheService {
   private yearnApi: YearnApiService
+  private merklApi: MerklApiService
   private yearnAprCalculator: YearnAprCalculator
   private morphoAprCalculator: MorphoAprCalculator
   private morphoUnderlyingAprCalculator: MorphoUnderlyingAprCalculator
@@ -47,6 +50,7 @@ export class DataCacheService {
 
   constructor() {
     this.yearnApi = new YearnApiService()
+    this.merklApi = new MerklApiService()
     this.yearnAprCalculator = new YearnAprCalculator()
     this.morphoAprCalculator = new MorphoAprCalculator()
     this.morphoUnderlyingAprCalculator = new MorphoUnderlyingAprCalculator()
@@ -66,6 +70,10 @@ export class DataCacheService {
       )
     }
 
+    // Share the existing bulk Morpho opportunity fetch between reward and
+    // forward-estimate calculators. Never fetch Merkl once per strategy.
+    const morphoOpportunitiesPromise = this.merklApi.getMorphoOpportunities()
+
     // Get APR data from each calculator
     const [
       yearnAPRs,
@@ -74,8 +82,15 @@ export class DataCacheService {
       sushiAPRs,
     ] = await Promise.all([
       this.yearnAprCalculator.calculateVaultAPRs(vaults),
-      this.morphoAprCalculator.calculateVaultAPRs(vaults),
-      this.morphoUnderlyingAprCalculator.calculateVaultAPRs(vaults),
+      morphoOpportunitiesPromise.then((opportunities) =>
+        this.morphoAprCalculator.calculateVaultAPRs(vaults, opportunities),
+      ),
+      morphoOpportunitiesPromise.then((opportunities) =>
+        this.morphoUnderlyingAprCalculator.calculateVaultAPRs(
+          vaults,
+          opportunities,
+        ),
+      ),
       this.sushiAprCalculator.calculateVaultAPRs(vaults),
     ])
 
@@ -200,7 +215,7 @@ export class DataCacheService {
           : strategy.strategyRewardsAPR ?? strategyRewards.rawApr
         : strategy.strategyRewardsAPR ?? null
       const liveStrategyNetAPR =
-        morphoUnderlying && this.hasLiveMorphoReplacement(morphoUnderlying)
+        morphoUnderlying && this.hasMorphoReplacement(morphoUnderlying)
           ? morphoUnderlying.replacementAPR
           : this.getKongOracleAPR(strategy)
 
@@ -212,6 +227,8 @@ export class DataCacheService {
               morphoUnderlyingAPR: {
                 morphoVaultAddress: morphoUnderlying.morphoVaultAddress,
                 usedMorphoApi: morphoUnderlying.usedMorphoApi,
+                morphoEstimateSource:
+                  morphoUnderlying.morphoEstimateSource,
                 morphoBaseAPR: morphoUnderlying.morphoBaseAPR,
                 morphoBaseAPY: morphoUnderlying.morphoBaseAPY,
                 morphoRewardsAPR: morphoUnderlying.morphoRewardsAPR,
@@ -301,11 +318,11 @@ export class DataCacheService {
       return vault.apr?.forwardAPR
     }
 
-    const liveMorphoResults = morphoUnderlyingResults.filter(
-      this.hasLiveMorphoReplacement,
+    const resolvedMorphoResults = morphoUnderlyingResults.filter(
+      this.hasMorphoReplacement,
     )
     const morphoReplacementByStrategy = new Map(
-      liveMorphoResults.map((result) => [
+      resolvedMorphoResults.map((result) => [
         result.strategyAddress.toLowerCase(),
         result.replacementAPR,
       ]),
@@ -355,7 +372,11 @@ export class DataCacheService {
       },
       morphoUnderlying: this.buildVaultMorphoUnderlyingAPR(
         vault,
-        liveMorphoResults,
+        resolvedMorphoResults.filter(
+          (result) =>
+            result.morphoEstimateSource !==
+            MORPHO_ESTIMATE_SOURCE.KONG_ORACLE,
+        ),
       ),
     }
   }
@@ -491,13 +512,12 @@ export class DataCacheService {
     }
   }
 
-  private hasLiveMorphoReplacement(
+  private hasMorphoReplacement(
     result: MorphoUnderlyingAprResult,
   ): result is MorphoUnderlyingAprResult & {
     replacementAPR: number
   } {
     return (
-      result.usedMorphoApi &&
       typeof result.replacementAPR === 'number' &&
       Number.isFinite(result.replacementAPR)
     )

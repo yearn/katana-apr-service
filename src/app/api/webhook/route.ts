@@ -115,6 +115,9 @@ function buildStrategyOutputs(
     const estimatedAPY = toFiniteNumber(
       strategy.morphoUnderlyingAPR?.estimatedAPY,
     )
+    const morphoEstimateSource = toFiniteNumber(
+      strategy.morphoUnderlyingAPR?.morphoEstimateSource,
+    )
     const katRewardsAPR = toFiniteNumber(strategy.strategyRewardsAPR)
 
     if (estimatedAPR != null) {
@@ -132,6 +135,15 @@ function buildStrategyOutputs(
         address,
         component: 'netAPY',
         value: estimatedAPY,
+      })
+    }
+
+    if (estimatedAPR != null && morphoEstimateSource != null) {
+      outputs.push({
+        ...base,
+        address,
+        component: 'morphoEstimateSource',
+        value: morphoEstimateSource,
       })
     }
 
