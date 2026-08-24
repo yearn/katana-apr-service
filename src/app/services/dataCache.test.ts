@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { YearnVault } from '../types'
+import { MORPHO_ESTIMATE_SOURCE, type YearnVault } from '../types'
 
 const mocks = vi.hoisted(() => ({
   mockGetVaults: vi.fn(),
+  mockGetMorphoOpportunities: vi.fn(),
   mockCalculateYearnVaultAPRs: vi.fn(),
   mockCalculateMorphoVaultAPRs: vi.fn(),
   mockCalculateMorphoUnderlyingVaultAPRs: vi.fn(),
@@ -13,6 +14,12 @@ const mocks = vi.hoisted(() => ({
 vi.mock('./externalApis/yearnApi', () => ({
   YearnApiService: vi.fn().mockImplementation(() => ({
     getVaults: mocks.mockGetVaults,
+  })),
+}))
+
+vi.mock('./externalApis/merklApi', () => ({
+  MerklApiService: vi.fn().mockImplementation(() => ({
+    getMorphoOpportunities: mocks.mockGetMorphoOpportunities,
   })),
 }))
 
@@ -63,12 +70,14 @@ const makeVault = (overrides: Partial<YearnVault> = {}): YearnVault => ({
 describe('DataCacheService.generateVaultAPRData', () => {
   beforeEach(() => {
     mocks.mockGetVaults.mockReset()
+    mocks.mockGetMorphoOpportunities.mockReset()
     mocks.mockCalculateYearnVaultAPRs.mockReset()
     mocks.mockCalculateMorphoVaultAPRs.mockReset()
     mocks.mockCalculateMorphoUnderlyingVaultAPRs.mockReset()
     mocks.mockCalculateSushiVaultAPRs.mockReset()
     mocks.logVaultAprDebug.mockReset()
     mocks.mockCalculateYearnVaultAPRs.mockResolvedValue({})
+    mocks.mockGetMorphoOpportunities.mockResolvedValue([])
     mocks.mockCalculateMorphoVaultAPRs.mockResolvedValue({})
     mocks.mockCalculateMorphoUnderlyingVaultAPRs.mockResolvedValue({})
     mocks.mockCalculateSushiVaultAPRs.mockResolvedValue({})
@@ -84,6 +93,15 @@ describe('DataCacheService.generateVaultAPRData', () => {
     const service = new DataCacheService()
     const data = await service.generateVaultAPRData()
 
+    expect(mocks.mockGetMorphoOpportunities).toHaveBeenCalledOnce()
+    expect(mocks.mockCalculateMorphoVaultAPRs).toHaveBeenCalledWith(
+      [vault],
+      [],
+    )
+    expect(mocks.mockCalculateMorphoUnderlyingVaultAPRs).toHaveBeenCalledWith(
+      [vault],
+      [],
+    )
     expect(data[vault.address]).toEqual({
       name: vault.name,
       apr: 0,
@@ -395,6 +413,7 @@ describe('DataCacheService.generateVaultAPRData', () => {
           replacementAPR: 0.10,
           estimatedAPY: (1 + 0.10 / 52) ** 52 - 1,
           usedMorphoApi: true,
+          morphoEstimateSource: MORPHO_ESTIMATE_SOURCE.MORPHO_API,
         },
         {
           strategyAddress: idleStrategyAddress,
@@ -406,6 +425,7 @@ describe('DataCacheService.generateVaultAPRData', () => {
           replacementAPR: 0.50,
           estimatedAPY: (1 + 0.50 / 52) ** 52 - 1,
           usedMorphoApi: true,
+          morphoEstimateSource: MORPHO_ESTIMATE_SOURCE.MORPHO_API,
         },
       ],
     })
@@ -432,6 +452,7 @@ describe('DataCacheService.generateVaultAPRData', () => {
     expect(data[vault.address].strategies[0].morphoUnderlyingAPR).toEqual({
       morphoVaultAddress: '0x00000000000000000000000000000000000000a1',
       usedMorphoApi: true,
+      morphoEstimateSource: MORPHO_ESTIMATE_SOURCE.MORPHO_API,
       morphoBaseAPR: 0.08,
       morphoBaseAPY: 0.0832,
       morphoRewardsAPR: 0.02,
@@ -442,6 +463,7 @@ describe('DataCacheService.generateVaultAPRData', () => {
     expect(data[vault.address].strategies[2].morphoUnderlyingAPR).toEqual({
       morphoVaultAddress: '0x00000000000000000000000000000000000000a2',
       usedMorphoApi: true,
+      morphoEstimateSource: MORPHO_ESTIMATE_SOURCE.MORPHO_API,
       morphoBaseAPR: 0.20,
       morphoBaseAPY: 0.22,
       morphoRewardsAPR: 0.30,
@@ -485,12 +507,13 @@ describe('DataCacheService.generateVaultAPRData', () => {
           strategyAddress: morphoStrategyAddress,
           morphoVaultAddress:
             '0x00000000000000000000000000000000000000a2',
-          morphoBaseAPR: 0,
-          morphoBaseAPY: 0,
+          morphoBaseAPR: 0.03,
+          morphoBaseAPY: (1 + 0.03 / 52) ** 52 - 1,
           morphoRewardsAPR: 0,
-          replacementAPR: null,
-          estimatedAPY: null,
+          replacementAPR: 0.03,
+          estimatedAPY: (1 + 0.03 / 52) ** 52 - 1,
           usedMorphoApi: false,
+          morphoEstimateSource: MORPHO_ESTIMATE_SOURCE.KONG_ORACLE,
         },
       ],
     })
@@ -503,12 +526,106 @@ describe('DataCacheService.generateVaultAPRData', () => {
     expect(data[vault.address].strategies[0].netAPR).toBe(0.03)
     expect(data[vault.address].strategies[0].morphoUnderlyingAPR).toMatchObject({
       usedMorphoApi: false,
-      estimatedAPR: null,
-      estimatedAPY: null,
+      morphoEstimateSource: MORPHO_ESTIMATE_SOURCE.KONG_ORACLE,
+      estimatedAPR: 0.03,
+      estimatedAPY: (1 + 0.03 / 52) ** 52 - 1,
     })
     expect(
       data[vault.address].apr?.forwardAPR?.morphoUnderlying?.coveredDebtRatio,
     ).toBe(0)
+  })
+
+  it('counts Merkl estimates as coverage while keeping zero oracle fallbacks complete', async () => {
+    const merklStrategyAddress =
+      '0x00000000000000000000000000000000000000f6'
+    const oracleStrategyAddress =
+      '0x00000000000000000000000000000000000000f7'
+    const vault = makeVault({
+      tvl: {
+        totalAssets: '100',
+        tvl: 100,
+        price: 1,
+      },
+      strategies: [
+        {
+          address: merklStrategyAddress,
+          name: 'Morpho Merkl Compounder',
+          status: 'active',
+          netAPR: 0.04,
+          details: {
+            totalDebt: '50',
+            totalGain: '0',
+            totalLoss: '0',
+            lastReport: 0,
+            debtRatio: 5000,
+          },
+        },
+        {
+          address: oracleStrategyAddress,
+          name: 'Morpho Oracle Compounder',
+          status: 'active',
+          netAPR: 0,
+          details: {
+            totalDebt: '50',
+            totalGain: '0',
+            totalLoss: '0',
+            lastReport: 0,
+            debtRatio: 5000,
+          },
+        },
+      ],
+    })
+    mocks.mockGetVaults.mockResolvedValue([vault])
+    mocks.mockCalculateMorphoUnderlyingVaultAPRs.mockResolvedValue({
+      [vault.address]: [
+        {
+          strategyAddress: merklStrategyAddress,
+          morphoVaultAddress:
+            '0x00000000000000000000000000000000000000b1',
+          morphoBaseAPR: 0.04,
+          morphoBaseAPY: (1 + 0.04 / 52) ** 52 - 1,
+          morphoRewardsAPR: 0.02,
+          replacementAPR: 0.06,
+          estimatedAPY: (1 + 0.06 / 52) ** 52 - 1,
+          usedMorphoApi: false,
+          morphoEstimateSource:
+            MORPHO_ESTIMATE_SOURCE.MERKL_UNDERLYING,
+        },
+        {
+          strategyAddress: oracleStrategyAddress,
+          morphoVaultAddress:
+            '0x00000000000000000000000000000000000000b2',
+          morphoBaseAPR: 0,
+          morphoBaseAPY: 0,
+          morphoRewardsAPR: 0,
+          replacementAPR: 0,
+          estimatedAPY: 0,
+          usedMorphoApi: false,
+          morphoEstimateSource: MORPHO_ESTIMATE_SOURCE.KONG_ORACLE,
+        },
+      ],
+    })
+
+    const service = new DataCacheService()
+    const data = await service.generateVaultAPRData()
+
+    expect(data[vault.address].apr?.forwardAPR?.netAPR).toBeCloseTo(0.03)
+    expect(data[vault.address].apr?.forwardAPR?.morphoUnderlying).toEqual({
+      baseAPR: 0.02,
+      baseAPY: ((1 + 0.04 / 52) ** 52 - 1) * 0.5,
+      rewardsAPR: 0.01,
+      estimatedAPR: 0.03,
+      estimatedAPY: (1 + 0.03 / 52) ** 52 - 1,
+      coveredDebtRatio: 0.5,
+    })
+    expect(data[vault.address].strategies[0].morphoUnderlyingAPR).toMatchObject({
+      morphoEstimateSource: MORPHO_ESTIMATE_SOURCE.MERKL_UNDERLYING,
+      estimatedAPR: 0.06,
+    })
+    expect(data[vault.address].strategies[1].morphoUnderlyingAPR).toMatchObject({
+      morphoEstimateSource: MORPHO_ESTIMATE_SOURCE.KONG_ORACLE,
+      estimatedAPR: 0,
+    })
   })
 
   it('reports full estimated debt coverage for a zero-yield live Morpho estimate', async () => {
@@ -548,6 +665,7 @@ describe('DataCacheService.generateVaultAPRData', () => {
           replacementAPR: 0,
           estimatedAPY: 0,
           usedMorphoApi: true,
+          morphoEstimateSource: MORPHO_ESTIMATE_SOURCE.MORPHO_API,
         },
       ],
     })

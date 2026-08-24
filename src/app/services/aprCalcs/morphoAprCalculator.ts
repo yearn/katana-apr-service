@@ -1,5 +1,5 @@
 import _ from 'lodash'
-import type { YearnVault } from '../../types'
+import type { MerklOpportunity, YearnVault } from '../../types'
 import { MerklApiService } from '../externalApis/merklApi'
 import { YearnApiService } from '../externalApis/yearnApi'
 import { ContractReaderService } from '../contractReader'
@@ -19,9 +19,12 @@ export class MorphoAprCalculator implements APRCalculator {
   }
 
   async calculateVaultAPRs(
-    vaults: YearnVault[]
+    vaults: YearnVault[],
+    suppliedMorphoOpportunities?: MerklOpportunity[],
   ): Promise<Record<string, RewardCalculatorResult[]>> {
-    const morphoOpportunities = await this.merklApi.getMorphoOpportunities()
+    const morphoOpportunities =
+      suppliedMorphoOpportunities ??
+      (await this.merklApi.getMorphoOpportunities())
 
     const vaultStrategyPairs = _.chain(vaults)
       .map((vault) => ({
