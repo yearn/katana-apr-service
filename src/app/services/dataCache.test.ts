@@ -511,6 +511,72 @@ describe('DataCacheService.generateVaultAPRData', () => {
     ).toBe(0)
   })
 
+  it('uses the forward APR allocation weights for estimated debt coverage', async () => {
+    const liveMorphoStrategyAddress =
+      '0x00000000000000000000000000000000000000fb'
+    const fallbackStrategyAddress =
+      '0x00000000000000000000000000000000000000fc'
+    const vault = makeVault({
+      tvl: {
+        totalAssets: '100',
+        tvl: 100,
+        price: 1,
+      },
+      strategies: [
+        {
+          address: liveMorphoStrategyAddress,
+          name: 'Morpho Yearn USDC Compounder',
+          status: 'active',
+          netAPR: 0.01,
+          details: {
+            totalDebt: '60',
+            totalGain: '0',
+            totalLoss: '0',
+            lastReport: 0,
+            debtRatio: 6000,
+          },
+        },
+        {
+          address: fallbackStrategyAddress,
+          name: 'Steer USDC Strategy',
+          status: 'active',
+          netAPR: 0,
+          details: {
+            totalDebt: '0',
+            totalGain: '0',
+            totalLoss: '0',
+            lastReport: 0,
+            debtRatio: 4000,
+          },
+        },
+      ],
+    })
+    mocks.mockGetVaults.mockResolvedValue([vault])
+    mocks.mockCalculateMorphoUnderlyingVaultAPRs.mockResolvedValue({
+      [vault.address]: [
+        {
+          strategyAddress: liveMorphoStrategyAddress,
+          morphoVaultAddress:
+            '0x00000000000000000000000000000000000000ab',
+          morphoBaseAPR: 0.08,
+          morphoBaseAPY: 0.0832,
+          morphoRewardsAPR: 0.02,
+          replacementAPR: 0.10,
+          estimatedAPY: (1 + 0.10 / 52) ** 52 - 1,
+          usedMorphoApi: true,
+        },
+      ],
+    })
+
+    const service = new DataCacheService()
+    const data = await service.generateVaultAPRData()
+
+    expect(data[vault.address].apr?.forwardAPR?.netAPR).toBeCloseTo(0.06)
+    expect(
+      data[vault.address].apr?.forwardAPR?.morphoUnderlying?.coveredDebtRatio,
+    ).toBeCloseTo(0.6)
+  })
+
   it('reports full estimated debt coverage for a zero-yield live Morpho estimate', async () => {
     const morphoStrategyAddress =
       '0x00000000000000000000000000000000000000f9'

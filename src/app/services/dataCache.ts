@@ -36,6 +36,11 @@ interface StrategyRewardSummary {
   underlyingContract?: string
 }
 
+interface StrategyAllocation {
+  strategy: YearnStrategy
+  debtShare: number
+}
+
 const KATANA_ACCOUNTANT_DEFAULT_MAX_FEE = 0.5
 
 export class DataCacheService {
@@ -310,6 +315,9 @@ export class DataCacheService {
         result.replacementAPR,
       ]),
     )
+    const liveMorphoStrategyAddresses = new Set(
+      morphoReplacementByStrategy.keys(),
+    )
     const allocatedStrategies = (vault.strategies || [])
       .map((strategy) => ({
         strategy,
@@ -354,58 +362,56 @@ export class DataCacheService {
         rewardsAPR: null,
       },
       morphoUnderlying: this.buildVaultMorphoUnderlyingAPR(
-        vault,
+        allocatedStrategies,
         liveMorphoResults,
+        liveMorphoStrategyAddresses,
       ),
     }
   }
 
   private buildVaultMorphoUnderlyingAPR(
-    vault: YearnVault,
+    allocatedStrategies: StrategyAllocation[],
     morphoUnderlyingResults: Array<
       MorphoUnderlyingAprResult & { replacementAPR: number }
     >,
+    liveMorphoStrategyAddresses: ReadonlySet<string>,
   ): NonNullable<YearnVaultAPY['forwardAPR']>['morphoUnderlying'] {
-    const liveMorphoStrategyAddresses = new Set(
-      morphoUnderlyingResults.map((result) =>
-        result.strategyAddress.toLowerCase(),
-      ),
+    const allocationsByStrategy = new Map(
+      allocatedStrategies.map((allocation) => [
+        allocation.strategy.address.toLowerCase(),
+        allocation,
+      ]),
     )
-    const { coveredDebt, totalActiveDebt } = vault.strategies.reduce(
-      (accumulator, strategy) => {
-        const strategyDebt = this.getStrategyDebt(strategy)
-        if (strategyDebt <= BigInt(0)) {
+    const { coveredDebtShare, totalAllocatedDebtShare } =
+      allocatedStrategies.reduce(
+        (accumulator, allocation) => {
+          accumulator.totalAllocatedDebtShare += allocation.debtShare
+          if (
+            liveMorphoStrategyAddresses.has(
+              allocation.strategy.address.toLowerCase(),
+            )
+          ) {
+            accumulator.coveredDebtShare += allocation.debtShare
+          }
           return accumulator
-        }
-
-        accumulator.totalActiveDebt += strategyDebt
-        if (liveMorphoStrategyAddresses.has(strategy.address.toLowerCase())) {
-          accumulator.coveredDebt += strategyDebt
-        }
-        return accumulator
-      },
-      { coveredDebt: BigInt(0), totalActiveDebt: BigInt(0) },
-    )
+        },
+        { coveredDebtShare: 0, totalAllocatedDebtShare: 0 },
+      )
     const weighted = morphoUnderlyingResults.reduce(
       (accumulator, result) => {
-        const strategy = vault.strategies.find(
-          (candidate) =>
-            candidate.address.toLowerCase() ===
-            result.strategyAddress.toLowerCase(),
+        const allocation = allocationsByStrategy.get(
+          result.strategyAddress.toLowerCase(),
         )
-        if (!strategy) {
+        if (!allocation) {
           return accumulator
         }
 
-        const debtShare = this.getStrategyDebtShare(strategy, vault)
-        if (debtShare <= 0) {
-          return accumulator
-        }
-
-        accumulator.baseAPR += result.morphoBaseAPR * debtShare
-        accumulator.baseAPY += result.morphoBaseAPY * debtShare
-        accumulator.rewardsAPR += result.morphoRewardsAPR * debtShare
-        accumulator.estimatedAPR += result.replacementAPR * debtShare
+        accumulator.baseAPR += result.morphoBaseAPR * allocation.debtShare
+        accumulator.baseAPY += result.morphoBaseAPY * allocation.debtShare
+        accumulator.rewardsAPR +=
+          result.morphoRewardsAPR * allocation.debtShare
+        accumulator.estimatedAPR +=
+          result.replacementAPR * allocation.debtShare
         return accumulator
       },
       {
@@ -420,8 +426,8 @@ export class DataCacheService {
       ...weighted,
       estimatedAPY: this.convertAprToWeeklyApy(weighted.estimatedAPR),
       coveredDebtRatio:
-        totalActiveDebt > BigInt(0)
-          ? Number(coveredDebt) / Number(totalActiveDebt)
+        totalAllocatedDebtShare > 0
+          ? coveredDebtShare / totalAllocatedDebtShare
           : 1,
     }
   }

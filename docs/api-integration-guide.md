@@ -406,8 +406,8 @@ Notes:
   - `katanaNativeYield`
   - `steerPointsPerDollar` (legacy, always `0`)
 - Also emits strategy-addressed `katRewardsAPR` rows for strategies where `strategyRewardsAPR` is present, reusing the incoming estimated-APR label so Kong can hydrate them onto vault composition entries.
-- When live Morpho estimates contribute to a vault forward APR, also emits these vault-addressed diagnostics:
-  - `estimatedDebtCoverage`: share of total active strategy debt backed by live Morpho estimates; oracle-fallback debt is excluded
+- When Morpho underlying results are available and every allocated strategy has either a live estimate or oracle fallback, also emits these vault-addressed diagnostics:
+  - `estimatedDebtCoverage`: share of allocated strategy debt backed by live Morpho estimates; oracle-fallback debt is excluded, and vaults with no allocated debt report `1`
   - `morphoBaseAPY`: vault-asset-weighted Morpho base APY contribution
   - `morphoRewardsAPR`: vault-asset-weighted non-KAT Morpho rewards APR contribution
 - Diagnostic rows use the same finite-number guard as other estimated rows: explicit zero values are emitted, while non-finite values are omitted.
