@@ -26,6 +26,7 @@ export interface MorphoUnderlyingAPR {
 
 export interface VaultMorphoUnderlyingAPR {
   baseAPR: number
+  baseAPY: number
   rewardsAPR: number
   estimatedAPR: number
   estimatedAPY: number

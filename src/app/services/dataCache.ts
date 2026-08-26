@@ -36,6 +36,11 @@ interface StrategyRewardSummary {
   underlyingContract?: string
 }
 
+interface StrategyAllocation {
+  strategy: YearnStrategy
+  debtShare: number
+}
+
 const KATANA_ACCOUNTANT_DEFAULT_MAX_FEE = 0.5
 
 export class DataCacheService {
@@ -310,6 +315,9 @@ export class DataCacheService {
         result.replacementAPR,
       ]),
     )
+    const liveMorphoStrategyAddresses = new Set(
+      morphoReplacementByStrategy.keys(),
+    )
     const allocatedStrategies = (vault.strategies || [])
       .map((strategy) => ({
         strategy,
@@ -354,51 +362,73 @@ export class DataCacheService {
         rewardsAPR: null,
       },
       morphoUnderlying: this.buildVaultMorphoUnderlyingAPR(
-        vault,
+        allocatedStrategies,
         liveMorphoResults,
+        liveMorphoStrategyAddresses,
       ),
     }
   }
 
   private buildVaultMorphoUnderlyingAPR(
-    vault: YearnVault,
+    allocatedStrategies: StrategyAllocation[],
     morphoUnderlyingResults: Array<
       MorphoUnderlyingAprResult & { replacementAPR: number }
     >,
+    liveMorphoStrategyAddresses: ReadonlySet<string>,
   ): NonNullable<YearnVaultAPY['forwardAPR']>['morphoUnderlying'] {
+    const allocationsByStrategy = new Map(
+      allocatedStrategies.map((allocation) => [
+        allocation.strategy.address.toLowerCase(),
+        allocation,
+      ]),
+    )
+    const { coveredDebtShare, totalAllocatedDebtShare } =
+      allocatedStrategies.reduce(
+        (accumulator, allocation) => {
+          accumulator.totalAllocatedDebtShare += allocation.debtShare
+          if (
+            liveMorphoStrategyAddresses.has(
+              allocation.strategy.address.toLowerCase(),
+            )
+          ) {
+            accumulator.coveredDebtShare += allocation.debtShare
+          }
+          return accumulator
+        },
+        { coveredDebtShare: 0, totalAllocatedDebtShare: 0 },
+      )
     const weighted = morphoUnderlyingResults.reduce(
       (accumulator, result) => {
-        const strategy = vault.strategies.find(
-          (candidate) =>
-            candidate.address.toLowerCase() ===
-            result.strategyAddress.toLowerCase(),
+        const allocation = allocationsByStrategy.get(
+          result.strategyAddress.toLowerCase(),
         )
-        if (!strategy) {
+        if (!allocation) {
           return accumulator
         }
 
-        const debtShare = this.getStrategyDebtShare(strategy, vault)
-        if (debtShare <= 0) {
-          return accumulator
-        }
-
-        accumulator.baseAPR += result.morphoBaseAPR * debtShare
-        accumulator.rewardsAPR += result.morphoRewardsAPR * debtShare
-        accumulator.estimatedAPR += result.replacementAPR * debtShare
-        accumulator.coveredDebtRatio += debtShare
+        accumulator.baseAPR += result.morphoBaseAPR * allocation.debtShare
+        accumulator.baseAPY += result.morphoBaseAPY * allocation.debtShare
+        accumulator.rewardsAPR +=
+          result.morphoRewardsAPR * allocation.debtShare
+        accumulator.estimatedAPR +=
+          result.replacementAPR * allocation.debtShare
         return accumulator
       },
       {
         baseAPR: 0,
+        baseAPY: 0,
         rewardsAPR: 0,
         estimatedAPR: 0,
-        coveredDebtRatio: 0,
       },
     )
 
     return {
       ...weighted,
       estimatedAPY: this.convertAprToWeeklyApy(weighted.estimatedAPR),
+      coveredDebtRatio:
+        totalAllocatedDebtShare > 0
+          ? coveredDebtShare / totalAllocatedDebtShare
+          : 1,
     }
   }
 
@@ -445,8 +475,8 @@ export class DataCacheService {
       return debtRatio / 10_000
     }
 
+    const strategyDebt = this.getStrategyDebt(strategy)
     try {
-      const strategyDebt = BigInt(String(strategy.details?.totalDebt ?? '0'))
       const vaultTotalAssets = BigInt(String(vault.tvl?.totalAssets ?? '0'))
       if (strategyDebt <= BigInt(0) || vaultTotalAssets <= BigInt(0)) {
         return 0
@@ -455,6 +485,15 @@ export class DataCacheService {
       return Number(strategyDebt) / Number(vaultTotalAssets)
     } catch {
       return 0
+    }
+  }
+
+  private getStrategyDebt(strategy: YearnStrategy): bigint {
+    try {
+      const strategyDebt = BigInt(String(strategy.details?.totalDebt ?? '0'))
+      return strategyDebt > BigInt(0) ? strategyDebt : BigInt(0)
+    } catch {
+      return BigInt(0)
     }
   }
 
