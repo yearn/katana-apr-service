@@ -3,7 +3,11 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 import { captureError, flushObservability } from '../../../observability'
 
 import { DataCacheService } from '../../services/dataCache'
-import type { YearnStrategy, YearnVaultExtra } from '../../types/yearn'
+import type {
+  VaultMorphoUnderlyingAPR,
+  YearnStrategy,
+  YearnVaultExtra,
+} from '../../types/yearn'
 
 export const dynamic = 'force-dynamic'
 
@@ -174,6 +178,29 @@ function buildForwardAPROutputs(
   ]
 }
 
+function buildMorphoUnderlyingOutputs(
+  address: string,
+  morphoUnderlying: VaultMorphoUnderlyingAPR | undefined,
+  base: Omit<KongOutput, 'address' | 'component' | 'value'>,
+): KongOutput[] {
+  if (!morphoUnderlying) {
+    return []
+  }
+
+  const components: Array<[string, number]> = [
+    ['estimatedDebtCoverage', morphoUnderlying.coveredDebtRatio],
+    ['morphoBaseAPY', morphoUnderlying.baseAPY],
+    ['morphoRewardsAPR', morphoUnderlying.rewardsAPR],
+  ]
+
+  return components.flatMap(([component, value]) => {
+    const finiteValue = toFiniteNumber(value)
+    return finiteValue == null
+      ? []
+      : [{ ...base, address, component, value: finiteValue }]
+  })
+}
+
 export async function POST(req: NextRequest): Promise<Response> {
   const secret = process.env.KONG_WEBHOOK_SECRET
   if (!secret) {
@@ -221,6 +248,13 @@ export async function POST(req: NextRequest): Promise<Response> {
         ),
       )
       outputs.push(...buildStrategyOutputs(vault.strategies || [], base))
+      outputs.push(
+        ...buildMorphoUnderlyingOutputs(
+          address,
+          vault.apr?.forwardAPR?.morphoUnderlying,
+          base,
+        ),
+      )
     }
 
     return jsonResponseWithBigInt(outputs)
