@@ -8,6 +8,11 @@ For a full explanation of how this service queries Kong and Merkl, how values ar
 
 - [`docs/api-integration-guide.md`](./docs/api-integration-guide.md)
 
+The service requires the server-only `YEARN_PRICES_API_KEY` to resolve Katana
+spot prices. `YEARN_PRICES_BASE_URL` is optional and defaults to
+`https://prices.yearn.dev`. Keep the API key in the server environment; it is
+used for authenticated requests to the Yearn Price Service.
+
 ## Getting Started
 
 Start the development server:

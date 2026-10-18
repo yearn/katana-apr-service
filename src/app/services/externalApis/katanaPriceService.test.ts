@@ -11,11 +11,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.stubGlobal('fetch', mocks.fetchGet)
 
-import {
-  KatanaPriceService,
-  parseYDaemonPriceUsd,
-  resetKatanaPriceServiceCache,
-} from './katanaPriceService'
+import { KatanaPriceService, resetKatanaPriceServiceCache } from './katanaPriceService'
 
 const makeOkResponse = (data: unknown) =>
   Promise.resolve({
@@ -24,20 +20,35 @@ const makeOkResponse = (data: unknown) =>
     json: () => Promise.resolve(data),
   })
 
+const makePriceServiceResponse = (prices: Record<string, number>) =>
+  makeOkResponse({
+    coins: Object.fromEntries(
+      Object.entries(prices).map(([address, price]) => [
+        `katana:${address.toLowerCase()}`,
+        { prices: [{ price }] },
+      ]),
+    ),
+  })
+
+const makePriceServiceErrorResponse = (status: number) =>
+  Promise.resolve({
+    ok: false,
+    status,
+    json: () => Promise.resolve({ error: 'upstream error' }),
+  })
+
 describe('KatanaPriceService', () => {
   beforeEach(() => {
     vi.useRealTimers()
     mocks.fetchGet.mockReset()
     resetKatanaPriceServiceCache()
+    config.yearnPricesApiKey = 'test-price-service-key'
+    config.yearnPricesBaseUrl = 'https://prices.yearn.dev'
   })
 
-  it('returns yDaemon price when available for the canonical address', async () => {
+  it('reads the human-readable spot quote for the canonical address', async () => {
     mocks.fetchGet.mockImplementationOnce(() =>
-      makeOkResponse({
-        [config.katanaChainId]: {
-          [CANONICAL_KAT_ADDRESS.toLowerCase()]: '1250000',
-        },
-      }),
+      makePriceServiceResponse({ [CANONICAL_KAT_ADDRESS]: 1.25 }),
     )
 
     const service = new KatanaPriceService()
@@ -47,18 +58,23 @@ describe('KatanaPriceService', () => {
     )
 
     expect(price).toBe(1.25)
-    expect(mocks.fetchGet).toHaveBeenCalledWith(
-      `${config.yDaemonApiUrl}/prices/all`,
-    )
+    const [request, options] = mocks.fetchGet.mock.calls[0]
+    const requestUrl = new URL(request as URL)
+    expect(requestUrl.pathname).toBe('/api/prices/spot')
+    expect(JSON.parse(requestUrl.searchParams.get('coins') ?? '[]')).toEqual([
+      `katana:${CANONICAL_KAT_ADDRESS.toLowerCase()}`,
+    ])
+    expect(options.headers).toEqual({
+      Authorization: 'Bearer test-price-service-key',
+      Accept: 'application/json',
+    })
   })
 
-  it('falls back to CoinGecko when yDaemon cannot serve a price', async () => {
-    mocks.fetchGet.mockImplementationOnce(() => makeOkResponse({}))
+  it('falls back to CoinGecko when the Price Service has no quote', async () => {
+    mocks.fetchGet.mockImplementationOnce(() => makeOkResponse({ coins: {} }))
     mocks.fetchGet.mockImplementationOnce(() =>
       makeOkResponse({
-        [config.coingeckoKatanaCoinId]: {
-          usd: 1.25,
-        },
+        [config.coingeckoKatanaCoinId]: { usd: 1.25 },
       }),
     )
 
@@ -85,13 +101,9 @@ describe('KatanaPriceService', () => {
     )
   })
 
-  it('aliases the legacy KAT address to the canonical KAT yDaemon price', async () => {
+  it('falls back from a legacy KAT address to its canonical quote', async () => {
     mocks.fetchGet.mockImplementationOnce(() =>
-      makeOkResponse({
-        [config.katanaChainId]: {
-          [CANONICAL_KAT_ADDRESS.toLowerCase()]: '2500000',
-        },
-      }),
+      makePriceServiceResponse({ [CANONICAL_KAT_ADDRESS]: 2.5 }),
     )
 
     const service = new KatanaPriceService()
@@ -101,18 +113,11 @@ describe('KatanaPriceService', () => {
     )
 
     expect(price).toBe(2.5)
-    expect(mocks.fetchGet).toHaveBeenCalledWith(
-      `${config.yDaemonApiUrl}/prices/all`,
-    )
   })
 
-  it('aliases wrapped KAT addresses to the canonical KAT yDaemon price', async () => {
+  it('falls back from a wrapped KAT address to its canonical quote', async () => {
     mocks.fetchGet.mockImplementationOnce(() =>
-      makeOkResponse({
-        [config.katanaChainId]: {
-          [CANONICAL_KAT_ADDRESS.toLowerCase()]: '2500000',
-        },
-      }),
+      makePriceServiceResponse({ [CANONICAL_KAT_ADDRESS]: 2.5 }),
     )
 
     const service = new KatanaPriceService()
@@ -122,13 +127,10 @@ describe('KatanaPriceService', () => {
     )
 
     expect(price).toBe(2.5)
-    expect(mocks.fetchGet).toHaveBeenCalledWith(
-      `${config.yDaemonApiUrl}/prices/all`,
-    )
   })
 
-  it('returns 0 when both yDaemon and CoinGecko fail to provide a price', async () => {
-    mocks.fetchGet.mockImplementationOnce(() => makeOkResponse({}))
+  it('returns 0 when neither Price Service nor CoinGecko has a quote', async () => {
+    mocks.fetchGet.mockImplementationOnce(() => makeOkResponse({ coins: {} }))
     mocks.fetchGet.mockImplementationOnce(() => makeOkResponse({}))
 
     const service = new KatanaPriceService()
@@ -140,13 +142,32 @@ describe('KatanaPriceService', () => {
     expect(price).toBe(0)
   })
 
-  it('reuses a cached price within the TTL window', async () => {
+  it('logs Price Service authorization errors before using the CoinGecko fallback', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    mocks.fetchGet.mockImplementationOnce(() => makePriceServiceErrorResponse(401))
     mocks.fetchGet.mockImplementationOnce(() =>
       makeOkResponse({
-        [config.katanaChainId]: {
-          [CANONICAL_KAT_ADDRESS.toLowerCase()]: '1250000',
-        },
+        [config.coingeckoKatanaCoinId]: { usd: 1.25 },
       }),
+    )
+
+    const service = new KatanaPriceService()
+    const price = await service.getTokenPriceUsd(
+      config.katanaChainId,
+      CANONICAL_KAT_ADDRESS,
+    )
+
+    expect(price).toBe(1.25)
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      'Error fetching Yearn Price Service token prices:',
+      expect.any(Error),
+    )
+    consoleErrorSpy.mockRestore()
+  })
+
+  it('reuses a cached price within the TTL window', async () => {
+    mocks.fetchGet.mockImplementationOnce(() =>
+      makePriceServiceResponse({ [CANONICAL_KAT_ADDRESS]: 1.25 }),
     )
 
     const service = new KatanaPriceService()
@@ -187,16 +208,17 @@ describe('KatanaPriceService', () => {
     )
 
     expect(mocks.fetchGet).toHaveBeenCalledTimes(1)
-
-    const responseData = {
-      [config.katanaChainId]: {
-        [CANONICAL_KAT_ADDRESS.toLowerCase()]: '1250000',
-      },
-    }
     resolveRequest?.({
       ok: true,
       status: 200,
-      json: () => Promise.resolve(responseData),
+      json: () =>
+        Promise.resolve({
+          coins: {
+            [`katana:${CANONICAL_KAT_ADDRESS.toLowerCase()}`]: {
+              prices: [{ price: 1.25 }],
+            },
+          },
+        }),
     })
 
     const [firstPrice, secondPrice] = await Promise.all([
@@ -217,11 +239,7 @@ describe('KatanaPriceService', () => {
       .mockImplementation(() => undefined)
 
     mocks.fetchGet.mockImplementationOnce(() =>
-      makeOkResponse({
-        [config.katanaChainId]: {
-          [CANONICAL_KAT_ADDRESS.toLowerCase()]: '1250000',
-        },
-      }),
+      makePriceServiceResponse({ [CANONICAL_KAT_ADDRESS]: 1.25 }),
     )
 
     const service = new KatanaPriceService()
@@ -231,7 +249,7 @@ describe('KatanaPriceService', () => {
     )
 
     vi.setSystemTime(new Date('2026-03-18T09:01:30.000Z'))
-    mocks.fetchGet.mockRejectedValueOnce(new Error('yDaemon unavailable'))
+    mocks.fetchGet.mockRejectedValueOnce(new Error('Price Service unavailable'))
     mocks.fetchGet.mockImplementationOnce(() => makeOkResponse({}))
 
     const stalePrice = await service.getTokenPriceUsd(
@@ -244,11 +262,5 @@ describe('KatanaPriceService', () => {
     expect(mocks.fetchGet).toHaveBeenCalledTimes(3)
 
     consoleErrorSpy.mockRestore()
-  })
-})
-
-describe('parseYDaemonPriceUsd', () => {
-  it('parses yDaemon 6-decimal integer strings', () => {
-    expect(parseYDaemonPriceUsd('1234567')).toBe(1.234567)
   })
 })

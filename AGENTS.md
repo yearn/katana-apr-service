@@ -2,7 +2,7 @@
 
 ## Start Here
 
-- `docs/api-integration-guide.md` (primary reference for API flow, Merkl/yDaemon queries, filters, and live examples)
+- `docs/api-integration-guide.md` (primary reference for API flow, Kong and Price Service queries, filters, and live examples)
 
 ## Project Structure & Module Organization
 
