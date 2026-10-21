@@ -1,4 +1,3 @@
-import { formatUnits } from 'viem'
 import { config } from '../../config'
 import {
   CANONICAL_KAT_ADDRESS,
@@ -6,18 +5,33 @@ import {
   isKatanaRewardTokenAddress,
 } from '../katanaRewardTokens'
 
-type CoinGeckoTokenPriceResponse = Record<
-  string,
-  {
-    usd?: number
-  }
->
+type CoinGeckoTokenPriceResponse = Record<string, { usd?: number }>
 
-type YDaemonPricesChain = Record<string, Record<string, string>>
+type PriceServiceCoin = {
+  prices?: Array<{ price?: unknown }>
+  error?: { code?: string; message?: string }
+}
 
-const YDAEMON_PRICE_DECIMALS = 6
+type PriceServiceResponse = {
+  coins?: Record<string, PriceServiceCoin>
+}
+
 const PRICE_CACHE_TTL_MS = 60_000
 const PRICE_CACHE_STALE_TTL_MS = 5 * 60_000
+const PRICE_SERVICE_CHAIN_NAMES: Record<number, string> = {
+  1: 'ethereum',
+  10: 'optimism',
+  100: 'gnosis',
+  137: 'polygon',
+  146: 'sonic',
+  250: 'fantom',
+  8453: 'base',
+  42161: 'arbitrum',
+  80094: 'berachain',
+  747474: 'katana',
+  4663: 'robinhood',
+  999: 'hyperliquid',
+}
 
 type CachedKatanaPrice = {
   priceUsd: number
@@ -27,6 +41,9 @@ type CachedKatanaPrice = {
 
 const katanaPriceCache = new Map<string, CachedKatanaPrice>()
 const inFlightPriceRequests = new Map<string, Promise<number>>()
+
+const isFinitePrice = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0
 
 const isPositiveFiniteNumber = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value) && value > 0
@@ -42,32 +59,18 @@ const getCacheKeyAddress = (tokenAddress: string): string => {
 const getCacheKey = (chainId: number, tokenAddress: string): string =>
   `${chainId}:${getCacheKeyAddress(tokenAddress)}`
 
-const parseYDaemonPriceUsd = (rawPrice: unknown): number => {
-  if (typeof rawPrice !== 'string' || rawPrice.length === 0) {
-    return 0
-  }
-
-  try {
-    const normalizedPrice = Number(
-      formatUnits(BigInt(rawPrice), YDAEMON_PRICE_DECIMALS),
-    )
-    return isPositiveFiniteNumber(normalizedPrice) ? normalizedPrice : 0
-  } catch {
-    const parsedPrice = Number(rawPrice)
-    return isPositiveFiniteNumber(parsedPrice) ? parsedPrice : 0
-  }
-}
-
 export class KatanaPriceService {
   private readonly coingeckoApiUrl: string
   private readonly coingeckoKatanaCoinId: string
-  private readonly yearnApiUrl: string
+  private readonly yearnPricesApiKey?: string
+  private readonly yearnPricesBaseUrl: string
   private readonly coinGeckoHeaders?: Record<string, string>
 
   constructor() {
     this.coingeckoApiUrl = config.coingeckoApiUrl
     this.coingeckoKatanaCoinId = config.coingeckoKatanaCoinId
-    this.yearnApiUrl = config.yDaemonApiUrl
+    this.yearnPricesApiKey = config.yearnPricesApiKey
+    this.yearnPricesBaseUrl = config.yearnPricesBaseUrl
     this.coinGeckoHeaders = config.coingeckoApiKey
       ? { 'x-cg-demo-api-key': config.coingeckoApiKey }
       : undefined
@@ -94,7 +97,7 @@ export class KatanaPriceService {
       .then((priceUsd) => {
         const refreshedAt = Date.now()
 
-        if (priceUsd > 0) {
+        if (isFinitePrice(priceUsd)) {
           katanaPriceCache.set(cacheKey, {
             priceUsd,
             freshUntil: refreshedAt + PRICE_CACHE_TTL_MS,
@@ -121,12 +124,15 @@ export class KatanaPriceService {
   private async fetchTokenPriceUsd(
     chainId: number,
     tokenAddress: string,
-  ): Promise<number> {
+  ): Promise<number | undefined> {
     const lookupAddresses = getKatanaPriceLookupAddresses(tokenAddress)
 
-    const yDaemonPrice = await this.getYDaemonPriceUsd(chainId, lookupAddresses)
-    if (yDaemonPrice > 0) {
-      return yDaemonPrice
+    const priceServicePrice = await this.getPriceServicePriceUsd(
+      chainId,
+      lookupAddresses,
+    )
+    if (priceServicePrice !== undefined) {
+      return priceServicePrice
     }
 
     const coinGeckoPrice = await this.getCoinGeckoPriceUsd()
@@ -134,7 +140,7 @@ export class KatanaPriceService {
       return coinGeckoPrice
     }
 
-    return 0
+    return undefined
   }
 
   private async getCoinGeckoPriceUsd(): Promise<number> {
@@ -166,44 +172,68 @@ export class KatanaPriceService {
     return 0
   }
 
-  private async getYDaemonPriceUsd(
+  private async getPriceServicePriceUsd(
     chainId: number,
     addresses: string[],
-  ): Promise<number> {
+  ): Promise<number | undefined> {
+    const chainName = PRICE_SERVICE_CHAIN_NAMES[chainId]
+    if (!chainName) {
+      console.error(`Yearn Price Service does not support chain ${chainId}`)
+      return undefined
+    }
+
+    if (!this.yearnPricesApiKey) {
+      console.error('Yearn Price Service unavailable: YEARN_PRICES_API_KEY is not configured')
+      return undefined
+    }
+
     try {
-      const response = await fetch(`${this.yearnApiUrl}/prices/all`)
+      const url = new URL(`${this.yearnPricesBaseUrl}/api/prices/spot`)
+      url.searchParams.set(
+        'coins',
+        JSON.stringify(addresses.map(address => `${chainName}:${address.toLowerCase()}`)),
+      )
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${this.yearnPricesApiKey}`,
+          Accept: 'application/json',
+        },
+      })
 
       if (!response.ok) {
-        throw new Error(`HTTP error fetching yDaemon prices: ${response.status}`)
+        throw new Error(`HTTP error fetching Yearn Price Service prices: ${response.status}`)
       }
 
-      const data = (await response.json()) as YDaemonPricesChain
-      const chainPrices = data?.[String(chainId)]
-
-      if (!chainPrices) {
-        return 0
-      }
-
-      const normalizedChainPrices = new Map(
-        Object.entries(chainPrices).map(([address, price]) => [
-          address.toLowerCase(),
-          price,
+      const data = (await response.json()) as PriceServiceResponse
+      const normalizedPrices = new Map(
+        Object.entries(data?.coins ?? {}).map(([key, coin]) => [
+          key.toLowerCase(),
+          coin,
         ]),
       )
 
       for (const address of addresses) {
-        const price = parseYDaemonPriceUsd(
-          normalizedChainPrices.get(address.toLowerCase()),
-        )
-        if (price > 0) {
+        const tokenKey = `${chainName}:${address.toLowerCase()}`
+        const coin = normalizedPrices.get(tokenKey)
+        if (coin?.error) {
+          if (coin.error.code !== 'NOT_FOUND') {
+            console.error(
+              `Yearn Price Service could not price ${tokenKey}: ${coin.error.code ?? 'PRICE_UNAVAILABLE'} ${coin.error.message ?? ''}`,
+            )
+          }
+          continue
+        }
+
+        const price = coin?.prices?.[0]?.price
+        if (isFinitePrice(price)) {
           return price
         }
       }
     } catch (error) {
-      console.error('Error fetching yDaemon token prices:', error)
+      console.error('Error fetching Yearn Price Service token prices:', error)
     }
 
-    return 0
+    return undefined
   }
 }
 
@@ -211,5 +241,3 @@ export const resetKatanaPriceServiceCache = (): void => {
   katanaPriceCache.clear()
   inFlightPriceRequests.clear()
 }
-
-export { parseYDaemonPriceUsd }

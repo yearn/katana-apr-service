@@ -121,16 +121,17 @@ curl -sS -H "X-API-Key: $MERKL_API_KEY" 'https://api.merkl.xyz/v4/opportunities/
 
 When this repo needs a local KAT token price, it resolves prices in this order:
 
-1. yDaemon `GET /prices/all`
+1. Yearn Price Service `GET /api/prices/spot`
 2. CoinGecko by coin ID `katana-network-token`
 
 Notes:
 
-- yDaemon returns `chainId -> tokenAddress -> priceString`.
-- The yDaemon price strings use 6 decimals, matching the `yearn.fi` frontend path.
-- Wrapped KAT addresses fall back to canonical KAT before returning `0`.
+- Set the server-only `YEARN_PRICES_API_KEY` for the authenticated Price Service request; `YEARN_PRICES_BASE_URL` optionally overrides the default host `https://prices.yearn.dev`.
+- The service requests KAT and its supported aliases in one spot-price batch and reads the USD quote from `coins[key].prices[0].price`.
+- Price Service quotes are already human-readable USD numbers; no decimal scaling is applied.
+- Wrapped KAT lookups include the canonical KAT address as a fallback; if the Price Service has no quote, CoinGecko is tried before the service returns `0`.
 - KAT price lookups are cached in-process for 60 seconds, with request deduplication across concurrent callers.
-- CoinGecko is only queried when yDaemon cannot return a usable KAT price.
+- CoinGecko is queried when the Price Service has no usable quote or its request fails. Authentication and request failures are logged.
 - If a refresh fails, the service can reuse a stale cached KAT price for up to 5 minutes to reduce pricing disruption and CoinGecko rate-limit risk.
 
 ## End-to-End Pipeline
@@ -196,7 +197,7 @@ APR units:
 - `apr.extra.katanaAppRewardsAPR` from Yearn vault-level rewards
 - `apr.extra.fixedRateKatanaRewards` (legacy compatibility field; fixed-rate KAT rewards have ended and this is always `0`)
 - `apr.extra.katanaBonusAPY` (`0` post-TGE, kept for compatibility)
-- `apr.extra.katanaNativeYield` (`vault.apr.netAPR`, mapped from Kong monthly net APY for yDaemon compatibility)
+- `apr.extra.katanaNativeYield` (`vault.apr.netAPR`, mapped from Kong monthly net APY for response compatibility)
 - `apr.extra.steerPointsPerDollar` (`0`; legacy field kept after the points program ended)
 
 Weighting notes:

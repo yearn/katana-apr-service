@@ -21,7 +21,10 @@ export const config = {
   // biome-ignore lint/style/noNonNullAssertion: temp
   rpcUrl: process.env.RPC_URL_KATANA!,
   kongApiUrl: process.env.KONG_BASE_URI || 'https://kong.yearn.fi/api/rest',
-  yDaemonApiUrl: process.env.YDAEMON_BASE_URI || 'https://ydaemon.yearn.fi',
+  yearnPricesApiKey: process.env.YEARN_PRICES_API_KEY?.trim() || undefined,
+  yearnPricesBaseUrl:
+    process.env.YEARN_PRICES_BASE_URL?.trim().replace(/\/+$/, '') ||
+    'https://prices.yearn.dev',
   merklApiUrl: process.env.MERKL_BASE_URI || 'https://api.merkl.xyz',
   merklApiKey: process.env.MERKL_API_KEY?.trim() || undefined,
   morphoApiUri:

@@ -6,7 +6,7 @@ import { KATANA_REWARD_TOKEN_ADDRESSES } from '../src/app/services/katanaRewardT
 dotenv.config()
 
 const CHAIN_ID = Number.parseInt(process.env.KATANA_CHAIN_ID ?? '747474', 10)
-const YEARN_API_URL = process.env.YDAEMON_BASE_URI || 'https://ydaemon.yearn.fi'
+const KONG_API_URL = (process.env.KONG_BASE_URI || 'https://kong.yearn.fi/api/rest').replace(/\/+$/, '')
 const DEFAULT_MERKL_API_URL = 'https://api.merkl.xyz'
 const MERKL_API_URL = process.env.MERKL_BASE_URI || 'https://api.merkl.xyz'
 const MERKL_API_KEY = process.env.MERKL_API_KEY?.trim() || undefined
@@ -38,6 +38,15 @@ interface YearnVault {
   address: string
   symbol: string
   name: string
+}
+
+interface KongVaultListItem extends YearnVault {
+  chainId: number
+  origin?: string
+  isHidden?: boolean
+  isRetired?: boolean
+  migration?: boolean
+  inclusion?: { isKatana?: boolean }
 }
 
 interface MerklCampaign {
@@ -261,23 +270,27 @@ const parseArgs = (): {
 }
 
 const fetchYearnVaults = async (): Promise<YearnVault[]> => {
-  const params = new URLSearchParams({
-    hideAlways: 'true',
-    orderBy: 'featuringScore',
-    orderDirection: 'desc',
-    strategiesDetails: 'withDetails',
-    strategiesCondition: 'inQueue',
-    chainIDs: CHAIN_ID.toString(),
-    limit: '2500',
-  })
-
-  const response = await fetch(`${YEARN_API_URL}/vaults/katana?${params}`)
+  const response = await fetch(`${KONG_API_URL}/list/vaults/${CHAIN_ID}?origin=yearn`)
 
   if (!response.ok) {
-    throw new Error(`HTTP error fetching Yearn vaults: ${response.status}`)
+    throw new Error(`HTTP error fetching Kong vault list: ${response.status}`)
   }
 
-  return ((await response.json()) as YearnVault[]) || []
+  const vaults = (await response.json()) as KongVaultListItem[]
+  if (!Array.isArray(vaults)) {
+    throw new Error('Expected an array from Kong vault list')
+  }
+
+  return vaults
+    .filter((vault) =>
+      vault.chainId === CHAIN_ID &&
+      vault.origin === 'yearn' &&
+      vault.inclusion?.isKatana === true &&
+      vault.isHidden !== true &&
+      vault.isRetired !== true &&
+      vault.migration !== true
+    )
+    .map(({ address, symbol, name }) => ({ address, symbol, name }))
 }
 
 const applyCampaignBlacklist = (
@@ -418,7 +431,7 @@ const main = async (): Promise<void> => {
           chainId: CHAIN_ID,
           selectedVaults: 0,
           message: vaultAddress
-            ? 'No vault matched the provided address in yDaemon response'
+            ? 'No active Katana vault matched the provided address in Kong response'
             : 'No vaults selected',
         },
         null,
