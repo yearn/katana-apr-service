@@ -324,16 +324,8 @@ describe('DataCacheService.generateVaultAPRData', () => {
           performance: 0.1,
         },
         forwardAPR: {
-          type: '',
+          type: 'upstream-forward-apr',
           netAPR: 0.025,
-          composite: {
-            boost: null,
-            poolAPY: null,
-            boostedAPR: null,
-            baseAPR: null,
-            cvxAPR: null,
-            rewardsAPR: null,
-          },
         },
       },
       tvl: {
@@ -418,11 +410,15 @@ describe('DataCacheService.generateVaultAPRData', () => {
     expect(data[vault.address].apr?.forwardAPR?.netAPR).toBeCloseTo(
       morphoGross - (0.02 * 0.5 + morphoGross * 0.1),
     )
+    expect(data[vault.address].apr?.forwardAPR?.type).toBe(
+      'katana-estimated-apr',
+    )
+    expect(data[vault.address].apr?.forwardAPR).not.toHaveProperty('composite')
     expect(data[vault.address].apr?.forwardAPR?.morphoUnderlying).toEqual({
       baseAPR: 0.08 * 0.5,
       rewardsAPR: 0.02 * 0.5,
-      estimatedAPR: 0.10 * 0.5,
-      estimatedAPY: (1 + (0.10 * 0.5) / 52) ** 52 - 1,
+      grossAPR: 0.10 * 0.5,
+      grossAPY: (1 + (0.10 * 0.5) / 52) ** 52 - 1,
       coveredDebtRatio: 0.5,
     })
     expect(data[vault.address].strategies[0].netAPR).toBe(0.10)
@@ -434,8 +430,8 @@ describe('DataCacheService.generateVaultAPRData', () => {
       morphoBaseAPR: 0.08,
       morphoBaseAPY: 0.0832,
       morphoRewardsAPR: 0.02,
-      estimatedAPR: 0.10,
-      estimatedAPY: (1 + 0.10 / 52) ** 52 - 1,
+      grossAPR: 0.10,
+      grossAPY: (1 + 0.10 / 52) ** 52 - 1,
     })
     expect(data[vault.address].strategies[1].morphoUnderlyingAPR).toBeUndefined()
     expect(data[vault.address].strategies[2].morphoUnderlyingAPR).toEqual({
@@ -444,8 +440,8 @@ describe('DataCacheService.generateVaultAPRData', () => {
       morphoBaseAPR: 0.20,
       morphoBaseAPY: 0.22,
       morphoRewardsAPR: 0.30,
-      estimatedAPR: 0.50,
-      estimatedAPY: (1 + 0.50 / 52) ** 52 - 1,
+      grossAPR: 0.50,
+      grossAPY: (1 + 0.50 / 52) ** 52 - 1,
     })
   })
 
@@ -502,8 +498,8 @@ describe('DataCacheService.generateVaultAPRData', () => {
     expect(data[vault.address].strategies[0].netAPR).toBe(0.03)
     expect(data[vault.address].strategies[0].morphoUnderlyingAPR).toMatchObject({
       usedMorphoApi: false,
-      estimatedAPR: null,
-      estimatedAPY: null,
+      grossAPR: null,
+      grossAPY: null,
     })
   })
 
@@ -512,16 +508,8 @@ describe('DataCacheService.generateVaultAPRData', () => {
       apr: {
         netAPR: 0.02,
         forwardAPR: {
-          type: '',
+          type: 'upstream-forward-apr',
           netAPR: null,
-          composite: {
-            boost: null,
-            poolAPY: null,
-            boostedAPR: null,
-            baseAPR: null,
-            cvxAPR: null,
-            rewardsAPR: null,
-          },
         },
       },
     })
@@ -549,6 +537,10 @@ describe('DataCacheService.generateVaultAPRData', () => {
     const data = await service.generateVaultAPRData()
 
     expect(data[vault.address].apr?.forwardAPR?.netAPR).toBeNull()
+    expect(data[vault.address].apr?.forwardAPR?.type).toBe(
+      'upstream-forward-apr',
+    )
+    expect(data[vault.address].apr?.forwardAPR).not.toHaveProperty('composite')
   })
 
   it('caps total accountant fees at max fee percent of gross APR', async () => {
