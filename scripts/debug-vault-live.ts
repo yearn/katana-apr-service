@@ -276,17 +276,12 @@ const fetchYearnVaults = async (): Promise<YearnVault[]> => {
     throw new Error(`HTTP error fetching Kong vault list: ${response.status}`)
   }
 
-  const responseData = (await response.json()) as unknown
-  const vaults = Array.isArray(responseData) ? responseData : []
+  const vaults = (await response.json()) as KongVaultListItem[]
+  if (!Array.isArray(vaults)) {
+    throw new Error('Expected an array from Kong vault list')
+  }
+
   return vaults
-    .filter((vault): vault is KongVaultListItem =>
-      typeof vault === 'object' &&
-      vault !== null &&
-      typeof (vault as KongVaultListItem).address === 'string' &&
-      typeof (vault as KongVaultListItem).symbol === 'string' &&
-      typeof (vault as KongVaultListItem).name === 'string' &&
-      typeof (vault as KongVaultListItem).chainId === 'number'
-    )
     .filter((vault) =>
       vault.chainId === CHAIN_ID &&
       vault.origin === 'yearn' &&
