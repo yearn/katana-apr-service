@@ -1,17 +1,13 @@
 import type { NextConfig } from "next";
 
-// Runtime config sourced from 1Password via yearn-gha vercel-deploy and
-// injected at `vercel build` time (see .github/workflows/deploy.yml). Listed
-// vars are inlined into the build output so nothing has to live in Vercel's
-// env store. All are referenced server-side only, so they never reach the
-// client bundle.
+// Doppler syncs app variables to Vercel for remote builds and server runtime.
+// Retain the existing build-time overrides below. The Price Service API key
+// is read at runtime and must not be added to Next.js's public env config.
 const INLINED_ENV = [
   "RPC_URL_KATANA",
   "KONG_WEBHOOK_SECRET",
   "COINGECKO_API_KEY",
   "KONG_BASE_URI",
-  "YEARN_PRICES_API_KEY",
-  "YEARN_PRICES_BASE_URL",
   "MERKL_BASE_URI",
   "COINGECKO_BASE_URI",
   "COINGECKO_KATANA_COIN_ID",
