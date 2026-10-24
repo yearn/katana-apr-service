@@ -120,6 +120,7 @@ describe('/api/webhook route', () => {
             },
             morphoUnderlying: {
               baseAPR: 0.02,
+              baseAPY: 0.0204,
               rewardsAPR: 0.01,
               estimatedAPR: 0.03,
               estimatedAPY: 0.0305,
@@ -151,9 +152,6 @@ describe('/api/webhook route', () => {
     const body = await response.json()
 
     expect(response.status).toBe(200)
-    expect(body).not.toContainEqual(
-      expect.objectContaining({ component: 'morphoRewardsAPR' }),
-    )
     expect(body).not.toContainEqual(
       expect.objectContaining({ component: 'estimatedAPR' }),
     )
@@ -254,6 +252,33 @@ describe('/api/webhook route', () => {
         label: 'katana',
         component: 'katRewardsAPR',
         value: 0,
+        blockNumber: '123',
+        blockTime: '456',
+      },
+      {
+        chainId: 747474,
+        address: REQUEST_VAULT_ADDRESS,
+        label: 'katana',
+        component: 'estimatedDebtCoverage',
+        value: 0.5,
+        blockNumber: '123',
+        blockTime: '456',
+      },
+      {
+        chainId: 747474,
+        address: REQUEST_VAULT_ADDRESS,
+        label: 'katana',
+        component: 'morphoBaseAPY',
+        value: 0.0204,
+        blockNumber: '123',
+        blockTime: '456',
+      },
+      {
+        chainId: 747474,
+        address: REQUEST_VAULT_ADDRESS,
+        label: 'katana',
+        component: 'morphoRewardsAPR',
+        value: 0.01,
         blockNumber: '123',
         blockTime: '456',
       },
@@ -429,6 +454,73 @@ describe('/api/webhook route', () => {
       blockNumber: '123',
       blockTime: '456',
     })
+  })
+
+  it('emits zero Morpho diagnostics and suppresses non-finite values', async () => {
+    mocks.mockGenerateVaultAPRData.mockResolvedValue({
+      [VAULT_ADDRESS.toLowerCase()]: {
+        address: VAULT_ADDRESS,
+        symbol: 'yvKAT',
+        name: 'KAT Vault',
+        chainID: 747474,
+        strategies: [],
+        apr: {
+          forwardAPR: {
+            type: '',
+            netAPR: 0,
+            composite: {
+              boost: null,
+              poolAPY: null,
+              boostedAPR: null,
+              baseAPR: null,
+              cvxAPR: null,
+              rewardsAPR: null,
+            },
+            morphoUnderlying: {
+              baseAPR: 0,
+              baseAPY: 0,
+              rewardsAPR: Number.POSITIVE_INFINITY,
+              estimatedAPR: 0,
+              estimatedAPY: 0,
+              coveredDebtRatio: 0,
+            },
+          },
+          extra: {},
+        },
+      },
+    })
+
+    const response = await POST(
+      buildSignedRequest({
+        vaults: [REQUEST_VAULT_ADDRESS],
+        chainId: 747474,
+        blockNumber: '123',
+        blockTime: '456',
+        subscription: {
+          labels: ['katana-estimated-apr'],
+        },
+      }),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body).toContainEqual(
+      expect.objectContaining({
+        address: REQUEST_VAULT_ADDRESS,
+        component: 'estimatedDebtCoverage',
+        value: 0,
+      }),
+    )
+    expect(body).toContainEqual(
+      expect.objectContaining({
+        address: REQUEST_VAULT_ADDRESS,
+        component: 'morphoBaseAPY',
+        value: 0,
+      }),
+    )
+    expect(body).not.toContainEqual(
+      expect.objectContaining({ component: 'morphoRewardsAPR' }),
+    )
   })
 
   it('does not emit forward APR or APY rows for null, missing, or non-finite values', async () => {
