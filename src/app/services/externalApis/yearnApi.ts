@@ -271,14 +271,6 @@ const mapKongAprToYearnApr = (snapshot: KongVaultSnapshot): YearnVaultAPY => {
     forwardAPR: {
       type: '',
       netAPR: null,
-      composite: {
-        boost: null,
-        poolAPY: null,
-        boostedAPR: null,
-        baseAPR: null,
-        cvxAPR: null,
-        rewardsAPR: null,
-      },
     },
   }
 }
