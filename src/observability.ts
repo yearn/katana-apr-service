@@ -4,7 +4,7 @@ const FLUSH_TIMEOUT_MS = 2_000
 
 export function initObservability(): void {
   if (!process.env.SENTRY_DSN || Sentry.isInitialized()) return
-  Sentry.init({ dsn: process.env.SENTRY_DSN, skipOpenTelemetrySetup: true })
+  Sentry.init({ dsn: process.env.SENTRY_DSN })
 }
 
 export function captureError(error: unknown): void {
