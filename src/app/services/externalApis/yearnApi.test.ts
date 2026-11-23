@@ -23,6 +23,31 @@ const makeOkResponse = (data: unknown) =>
   })
 
 describe('YearnApiService', () => {
+  it('preserves redirect failures instead of reporting missing vaults', async () => {
+    const error = new TypeError('Too many redirects')
+    mocks.fetchGet.mockRejectedValueOnce(error)
+    await expect(new YearnApiService().getVaults()).rejects.toBe(error)
+  })
+
+  it('preserves HTTP failures instead of reporting missing vaults', async () => {
+    mocks.fetchGet.mockResolvedValueOnce({ ok: false, status: 503 })
+    await expect(new YearnApiService().getVaults()).rejects.toThrow(
+      'HTTP error fetching vault list from Kong: 503',
+    )
+  })
+
+  it('preserves snapshot failures instead of dropping the vault list', async () => {
+    mocks.fetchGet.mockResolvedValueOnce({
+      ok: true,
+      json: async () => [{ chainId: 747474, address: '0xaa', origin: 'yearn',
+        inclusion: { isKatana: true } }],
+    })
+    mocks.fetchGet.mockResolvedValueOnce({ ok: false, status: 502 })
+    await expect(new YearnApiService().getVaults()).rejects.toThrow(
+      'HTTP error fetching vault snapshot from Kong: 502',
+    )
+  })
+
   beforeEach(() => {
     mocks.fetchGet.mockReset()
     mocks.logVaultAprDebug.mockReset()

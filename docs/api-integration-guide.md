@@ -45,7 +45,13 @@ At request time, the service:
 
 Base URL (default):
 
-- `https://kong.yearn.fi/api/rest`
+- `https://kong.yearn.farm/api/rest`
+
+The legacy `https://kong.yearn.fi/api/rest` configuration is normalized to
+`.farm`, including when supplied through `KONG_BASE_URI`. This avoids the
+self-redirect loop observed on Worker-origin Kong requests. Custom API bases
+are preserved. Fetch failures propagate to the route error handler instead of
+being reported as an empty vault list.
 
 Endpoints used by this repo:
 
@@ -61,8 +67,8 @@ Filtering and mapping:
 Example:
 
 ```bash
-curl -sS 'https://kong.yearn.fi/api/rest/list/vaults/747474?origin=yearn'
-curl -sS 'https://kong.yearn.fi/api/rest/snapshot/747474/0x80c34BD3A3569E126e7055831036aa7b212cB159'
+curl -sS 'https://kong.yearn.farm/api/rest/list/vaults/747474?origin=yearn'
+curl -sS 'https://kong.yearn.farm/api/rest/snapshot/747474/0x80c34BD3A3569E126e7055831036aa7b212cB159'
 ```
 
 ### Merkl (opportunities and campaigns)
@@ -242,7 +248,7 @@ These were sampled from live upstream APIs on **March 9, 2026 (America/New_York)
 Query:
 
 ```bash
-curl -sS 'https://kong.yearn.fi/api/rest/snapshot/747474/0x80c34BD3A3569E126e7055831036aa7b212cB159'
+curl -sS 'https://kong.yearn.farm/api/rest/snapshot/747474/0x80c34BD3A3569E126e7055831036aa7b212cB159'
 ```
 
 Snippet:

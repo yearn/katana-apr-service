@@ -372,7 +372,7 @@ export class YearnApiService {
       return vaults
     } catch (error) {
       console.error('Error fetching vaults from Kong:', error)
-      return []
+      throw error
     }
   }
 
