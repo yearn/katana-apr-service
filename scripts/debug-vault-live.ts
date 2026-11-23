@@ -1,3 +1,4 @@
+import { resolveKongApiUrl } from '../src/app/config/kong'
 import dotenv from 'dotenv'
 import { isAddress } from 'viem'
 import { isExcludedCampaignId } from '../src/app/services/externalApis/merklBlacklist'
@@ -6,7 +7,7 @@ import { KATANA_REWARD_TOKEN_ADDRESSES } from '../src/app/services/katanaRewardT
 dotenv.config()
 
 const CHAIN_ID = Number.parseInt(process.env.KATANA_CHAIN_ID ?? '747474', 10)
-const KONG_API_URL = (process.env.KONG_BASE_URI || 'https://kong.yearn.fi/api/rest').replace(/\/+$/, '')
+const KONG_API_URL = resolveKongApiUrl(process.env.KONG_BASE_URI)
 const DEFAULT_MERKL_API_URL = 'https://api.merkl.xyz'
 const MERKL_API_URL = process.env.MERKL_BASE_URI || 'https://api.merkl.xyz'
 const MERKL_API_KEY = process.env.MERKL_API_KEY?.trim() || undefined

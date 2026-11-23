@@ -1,5 +1,6 @@
 import { createConfig } from '@wagmi/core'
 import dotenv from 'dotenv'
+import { resolveKongApiUrl } from './kong'
 import { defineChain, http } from 'viem'
 
 dotenv.config()
@@ -20,7 +21,7 @@ export const config = {
   katanaChainId: 747474,
   // biome-ignore lint/style/noNonNullAssertion: temp
   rpcUrl: process.env.RPC_URL_KATANA!,
-  kongApiUrl: process.env.KONG_BASE_URI || 'https://kong.yearn.fi/api/rest',
+  kongApiUrl: resolveKongApiUrl(process.env.KONG_BASE_URI),
   yearnPricesApiKey: process.env.YEARN_PRICES_API_KEY?.trim() || undefined,
   yearnPricesBaseUrl:
     process.env.YEARN_PRICES_BASE_URL?.trim().replace(/\/+$/, '') ||
