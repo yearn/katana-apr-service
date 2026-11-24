@@ -105,29 +105,29 @@ function buildStrategyOutputs(
     }
 
     const outputs: KongOutput[] = []
-    const estimatedAPR = toFiniteNumber(
-      strategy.morphoUnderlyingAPR?.estimatedAPR,
+    const grossAPR = toFiniteNumber(
+      strategy.morphoUnderlyingAPR?.grossAPR,
     )
-    const estimatedAPY = toFiniteNumber(
-      strategy.morphoUnderlyingAPR?.estimatedAPY,
+    const grossAPY = toFiniteNumber(
+      strategy.morphoUnderlyingAPR?.grossAPY,
     )
     const katRewardsAPR = toFiniteNumber(strategy.strategyRewardsAPR)
 
-    if (estimatedAPR != null) {
+    if (grossAPR != null) {
       outputs.push({
         ...base,
         address,
         component: 'netAPR',
-        value: estimatedAPR,
+        value: grossAPR,
       })
     }
 
-    if (estimatedAPY != null) {
+    if (grossAPY != null) {
       outputs.push({
         ...base,
         address,
         component: 'netAPY',
-        value: estimatedAPY,
+        value: grossAPY,
       })
     }
 

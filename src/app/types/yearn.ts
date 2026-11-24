@@ -20,15 +20,15 @@ export interface MorphoUnderlyingAPR {
   morphoBaseAPR: number
   morphoBaseAPY: number
   morphoRewardsAPR: number
-  estimatedAPR: number | null
-  estimatedAPY: number | null
+  grossAPR: number | null
+  grossAPY: number | null
 }
 
 export interface VaultMorphoUnderlyingAPR {
   baseAPR: number
   rewardsAPR: number
-  estimatedAPR: number
-  estimatedAPY: number
+  grossAPR: number
+  grossAPY: number
   coveredDebtRatio: number
 }
 
@@ -84,14 +84,6 @@ export interface YearnVaultAPY {
   forwardAPR?: {
     type: string
     netAPR: number | null
-    composite: {
-      boost: number | null
-      poolAPY: number | null
-      boostedAPR: number | null
-      baseAPR: number | null
-      cvxAPR: number | null
-      rewardsAPR: number | null
-    }
     morphoUnderlying?: VaultMorphoUnderlyingAPR
   }
 }
