@@ -60,7 +60,7 @@ export default function Home(): React.ReactElement {
             Example Usage
           </h3>
           <pre className="w-full bg-zinc-100 dark:bg-zinc-800 rounded p-3 text-sm text-zinc-800 dark:text-zinc-200 overflow-x-auto">
-            <code>curl https://katana-apr-service.vercel.app/api/vaults</code>
+            <code>curl https://katana-apr.yearn.fi/api/vaults</code>
           </pre>
           <h4 className="text-lg font-medium text-center text-zinc-800 dark:text-zinc-100 mt-2">
             Example Response
